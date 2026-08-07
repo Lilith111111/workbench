@@ -1,0 +1,17 @@
+{
+  "name": "工作台",
+  "short_name": "工作台",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F6F2FC",
+  "theme_color": "#B8A1F0",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "./icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ]
+}
