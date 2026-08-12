@@ -287,7 +287,8 @@
   .conn .dot{width:8px;height:8px;border-radius:50%;background:#CBD5E1;}
   .conn.on .dot{background:#34D399;}
   .conn.off .dot{background:#F87171;}
-  .friends-title{font-size:15px;font-weight:900;color:var(--text);margin:18px 18px 8px;}
+  .friends-title{font-size:15px;font-weight:900;color:var(--text);margin:18px 18px 8px;display:flex;align-items:center;justify-content:space-between;}
+  .friends-refresh{font-size:12px;font-weight:800;color:var(--purple,#9B72EF);background:#F3EDFE;border:none;border-radius:999px;padding:5px 11px;cursor:pointer;}
   .friend-grid{display:flex;flex-direction:column;gap:10px;padding:0 18px 14px;}
   .friend-chip{display:flex;align-items:center;gap:12px;background:#fff;border-radius:18px;box-shadow:var(--shadow-soft);padding:12px 14px;cursor:pointer;transition:transform .12s;}
   .friend-chip:active{transform:scale(0.98);}
@@ -1090,7 +1091,7 @@ function isTaskDone(t){
 function renderStats(){
   const el=document.getElementById("st-list");
   const p=loadProfile();
-  el.innerHTML=meCardHTML(p)+`<div class="friends-title">好友</div><div id="friends-wrap">${friendsHTML()}</div>`;
+  el.innerHTML=meCardHTML(p)+`<div class="friends-title">好友 <button class="friends-refresh" id="friends-refresh" type="button">⟳ 刷新</button></div><div id="friends-wrap">${friendsHTML()}</div>`;
   bindMeCard(p);
   el.insertAdjacentHTML("beforeend",statsCardsHTML());
   bindStatsCards();
@@ -1485,10 +1486,25 @@ function bindMeCard(p){
     if(v&&v!==p.roomCode){ p.roomCode=v; saveProfile(p); }
     connectMQTT();
   });
+  const fr=document.getElementById("friends-refresh");
+  if(fr) fr.addEventListener("click",clearGhostFriends);
   bindFriendClicks();
 }
 function bindFriendClicks(){
   document.querySelectorAll(".friend-chip").forEach(ch=>ch.addEventListener("click",()=>openFriendDetail(ch.dataset.uid)));
+}
+/* 清除旧设备/无痕窗口留下的「幽灵好友」：往每个非自己的 userId 发空 retained 消息清掉 broker 残留，并清空本地缓存 */
+function clearGhostFriends(){
+  const myId=profile.userId, room=profile.roomCode;
+  if(mqttClient&&mqttReady){
+    for(const id in friendsCache){
+      if(id===myId)continue;
+      try{ mqttClient.publish("workbench/"+room+"/"+id,"",{retain:true,qos:1}); }catch(e){}
+    }
+  }
+  friendsCache={}; saveFriendsCache();
+  const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
+  publishMyState();
 }
 function statsCardsHTML(){
   const today=dateKey(new Date());
