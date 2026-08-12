@@ -101,6 +101,11 @@
   .checkbox-wrap{display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;}
   .checkbox-wrap input{width:20px;height:20px;accent-color:var(--primary-dark);}
   .color-pick{display:flex;gap:12px;flex-wrap:wrap;padding:4px 2px;}
+  .time-clearable{position:relative;}
+  .time-input-wrap{position:relative;display:flex;align-items:center;}
+  .time-input-wrap input[type=time]{width:100%;padding-right:30px;}
+  .time-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:none;border-radius:50%;background:#ECE6FA;color:#9B72EF;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .time-clear:active{transform:translateY(-50%) scale(0.9);}
   .color-dot{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;box-shadow:0 1px 4px rgba(0,0,0,0.12);transition:transform .1s,border-color .1s;}
   .color-dot.sel{border-color:var(--text);transform:scale(1.12);}
   .seg{display:flex;gap:0;background:#F1ECFB;border-radius:14px;padding:4px;}
@@ -403,7 +408,7 @@
   <div class="form-row" id="ci-once-row" style="display:none;"><div class="form-group"><label>打卡日期</label><input type="date" id="ci-once-date"></div></div>
   <div class="form-row" id="ci-range-row" style="display:none;"><div class="form-group"><label>开始日期</label><input type="date" id="ci-range-start"></div><div class="form-group"><label>结束日期</label><input type="date" id="ci-range-end"></div></div>
   <div class="form-row"><div class="form-group"><label>每日次数</label><input type="number" id="ci-daily" min="1" value="1"></div></div>
-  <div class="form-row"><div class="form-group"><label>开始时间（可不填）</label><input type="time" id="ci-wstart"></div><div class="form-group"><label>结束时间（可不填）</label><input type="time" id="ci-wend"></div></div>
+  <div class="form-row"><div class="form-group time-clearable"><label>开始时间（可不填）</label><div class="time-input-wrap"><input type="time" id="ci-wstart"><button type="button" class="time-clear" data-clear="ci-wstart" title="清除时间">✕</button></div></div><div class="form-group time-clearable"><label>结束时间（可不填）</label><div class="time-input-wrap"><input type="time" id="ci-wend"><button type="button" class="time-clear" data-clear="ci-wend" title="清除时间">✕</button></div></div></div>
   <div class="form-group"><label class="checkbox-wrap"><input type="checkbox" id="ci-timeline"> 在时间轴显示</label></div>
   <div class="form-actions"><button class="btn btn-danger" id="ci-del" type="button">删除</button><button class="btn btn-primary btn-block" id="ci-save" type="button">保存</button></div>
 </div></div>
@@ -413,15 +418,16 @@
   <div class="form-group"><label>颜色</label><div class="color-pick" id="task-color-pick"></div></div>
   <div class="form-group"><label>任务名称</label><input type="text" id="task-name" placeholder="例如：练字"></div>
   <div class="form-group"><label>备注（可选）</label><input type="text" id="task-desc" placeholder="例如：每天一页"></div>
-  <div class="form-group"><label>类型</label>
-    <div class="seg" id="task-type-seg">
-      <button type="button" class="seg-btn active" data-type="point">时间点</button>
-      <button type="button" class="seg-btn" data-type="period">时间段</button>
+  <div class="form-group"><label>日期</label>
+    <div class="seg" id="task-repeat-seg">
+      <button type="button" class="seg-btn active" data-repeat="once">当日</button>
+      <button type="button" class="seg-btn" data-repeat="daily">每日</button>
+      <button type="button" class="seg-btn" data-repeat="range">区间</button>
     </div>
   </div>
-  <div class="form-group" id="task-point-row"><label>预计时间点</label><input type="time" id="task-point-time"></div>
-  <div class="form-row" id="task-period-row" style="display:none;"><div class="form-group"><label>开始时间</label><input type="time" id="task-period-start"></div><div class="form-group"><label>结束时间</label><input type="time" id="task-period-end"></div></div>
-  <div class="form-row"><div class="form-group"><label>开始日期</label><input type="date" id="task-date"></div><div class="form-group"><label>最后完成日期</label><input type="date" id="task-enddate"></div></div>
+  <div class="form-row" id="task-once-row"><div class="form-group"><label>任务日期</label><input type="date" id="task-once-date"></div></div>
+  <div class="form-row" id="task-range-row" style="display:none;"><div class="form-group"><label>开始日期</label><input type="date" id="task-range-start"></div><div class="form-group"><label>结束日期</label><input type="date" id="task-range-end"></div></div>
+  <div class="form-row" id="task-period-row"><div class="form-group time-clearable"><label>开始时间（可不填）</label><div class="time-input-wrap"><input type="time" id="task-period-start"><button type="button" class="time-clear" data-clear="task-period-start" title="清除时间">✕</button></div></div><div class="form-group time-clearable"><label>结束时间（可不填）</label><div class="time-input-wrap"><input type="time" id="task-period-end"><button type="button" class="time-clear" data-clear="task-period-end" title="清除时间">✕</button></div></div></div>
   <div class="form-actions"><button class="btn btn-danger" id="task-del" type="button">删除</button><button class="btn btn-primary btn-block" id="task-save" type="button">保存</button></div>
 </div></div>
 
@@ -585,6 +591,7 @@ function migrateState(s){
   s.tasks.forEach((t,i)=>{
     if(t.type==="period"&&t.phase===undefined){t.phase=t.done>=1?"done":"pending";}
     t.type=t.type||"point";
+    t.repeat=t.repeat||"once";
     t.date=t.date||tk;
     t.endDate=t.endDate||t.date;
     t.color=t.color||"yellow";
@@ -902,6 +909,7 @@ function timeMin(s){if(!s)return 9999;const[h,m]=s.split(":").map(Number);return
 function hhmm(iso){ if(!iso)return "--"; const d=new Date(iso); if(isNaN(d))return "--"; return pad(d.getHours())+":"+pad(d.getMinutes()); }
 function hhmmNow(){ const d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
 function taskDateRangeText(t){
+  if(t.repeat==="daily") return "每日任务";
   if(t.date===t.endDate){
     return (t.date===dateKey(new Date()))?"当日任务":`${parseKey(t.date).getMonth()+1}月${parseKey(t.date).getDate()}日任务`;
   }
@@ -1174,6 +1182,10 @@ function setCiRepeat(rep){
   document.getElementById("ci-once-row").style.display = rep==="once"?"flex":"none";
   document.getElementById("ci-range-row").style.display = rep==="range"?"flex":"none";
 }
+function setTaskRepeat(rep){
+  document.getElementById("task-once-row").style.display = rep==="once"?"flex":"none";
+  document.getElementById("task-range-row").style.display = rep==="range"?"flex":"none";
+}
 function openCheckinModal(id){
   editingId=id||null;editingType="checkin";
   const title=document.getElementById("ci-modal-title");
@@ -1246,35 +1258,32 @@ function openTaskModal(id){
   editingId=id||null;editingType="task";
   const title=document.getElementById("task-modal-title");
   const del=document.getElementById("task-del");
-  const seg=document.getElementById("task-type-seg");
-  const setSeg=(type)=>{
-    seg.querySelectorAll(".seg-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===type));
-    document.getElementById("task-point-row").style.display=type==="point"?"block":"none";
-    document.getElementById("task-period-row").style.display=type==="period"?"flex":"none";
-  };
-  seg.querySelectorAll(".seg-btn").forEach(b=>{b.onclick=()=>setSeg(b.dataset.type);});
+  const repSeg=document.getElementById("task-repeat-seg");
+  const setRep=rep=>{ repSeg.querySelectorAll(".seg-btn").forEach(b=>b.classList.toggle("active",b.dataset.repeat===rep)); setTaskRepeat(rep); };
+  repSeg.querySelectorAll(".seg-btn").forEach(b=>{ b.onclick=()=>setRep(b.dataset.repeat); });
+  const today=dateKey(new Date());
   if(id){
     const t=state.tasks.find(x=>x.id===id);title.textContent="编辑任务";
     document.getElementById("task-name").value=t.name;
     document.getElementById("task-desc").value=t.desc||"";
-    const isPeriod=(t.type==="period"||t.type==="range");
-    setSeg(isPeriod?"period":"point");
-    document.getElementById("task-point-time").value=t.planStart||"";
     document.getElementById("task-period-start").value=t.planStart||"";
     document.getElementById("task-period-end").value=t.planEnd||"";
-    document.getElementById("task-date").value=t.date||dateKey(selDate);
-    document.getElementById("task-enddate").value=t.endDate||t.date||dateKey(selDate);
+    const rep=t.repeat||"once";
+    document.getElementById("task-once-date").value=t.date||today;
+    document.getElementById("task-range-start").value=t.date||today;
+    document.getElementById("task-range-end").value=t.endDate||today;
+    setRep(rep);
     del.style.display="inline-block";
   }else{
     title.textContent="新建任务";
     document.getElementById("task-name").value="";
     document.getElementById("task-desc").value="";
-    setSeg("point");
-    document.getElementById("task-point-time").value="08:00";
-    document.getElementById("task-period-start").value="08:00";
-    document.getElementById("task-period-end").value="09:00";
-    document.getElementById("task-date").value=dateKey(selDate);
-    document.getElementById("task-enddate").value=dateKey(selDate);
+    document.getElementById("task-period-start").value="";
+    document.getElementById("task-period-end").value="";
+    document.getElementById("task-once-date").value=dateKey(selDate);
+    document.getElementById("task-range-start").value=dateKey(selDate);
+    document.getElementById("task-range-end").value=dateKey(selDate);
+    setRep("once");
     del.style.display="none";
   }
   selColor=id?(state.tasks.find(x=>x.id===id)?.color||"yellow"):"yellow";
@@ -1283,23 +1292,26 @@ function openTaskModal(id){
 }
 document.getElementById("task-save").addEventListener("click",()=>{
   const name=val("task-name").trim();if(!name)return;
-  const seg=document.getElementById("task-type-seg");
-  const typeBtn=seg.querySelector(".seg-btn.active");
-  const type=typeBtn?typeBtn.dataset.type:"point";
   const desc=val("task-desc").trim();
-  let planStart="",planEnd="";
-  if(type==="point"){planStart=val("task-point-time");}
-  else{planStart=val("task-period-start");planEnd=val("task-period-end");}
-  if(type==="period"&&(!planStart||!planEnd)){alert("请设置时间段");return;}
-  const startDate=val("task-date")||dateKey(selDate);
-  const endDate=val("task-enddate")||startDate;
+  const planStart=val("task-period-start");
+  const planEnd=val("task-period-end");
+  const repSeg=document.getElementById("task-repeat-seg");
+  const repeat=(repSeg.querySelector(".seg-btn.active")||{dataset:{}}).dataset.repeat||"once";
+  const today=dateKey(new Date());
+  const far=dateKey(new Date(Date.now()+365*86400000));
+  let start=today,end=far;
+  if(repeat==="once"){ start=val("task-once-date")||today; end=start; }
+  else if(repeat==="range"){
+    let a=val("task-range-start")||today, b=val("task-range-end")||today;
+    if(a>b){const t=a;a=b;b=t;}
+    start=a; end=b;
+  }
   if(editingId){
     const t=state.tasks.find(x=>x.id===editingId);
-    t.name=name;t.type=type;t.desc=desc;t.planStart=planStart;t.planEnd=planEnd;t.date=startDate;t.endDate=endDate;t.color=selColor;
+    t.name=name;t.type="period";t.desc=desc;t.planStart=planStart;t.planEnd=planEnd;t.repeat=repeat;t.date=start;t.endDate=end;t.color=selColor;
   }else{
     const maxOrder=state.tasks.reduce((m,x)=>Math.max(m,x.order||0),0);
-    const isPeriod=(type==="period");
-    state.tasks.push({id:uid(),name,desc,date:startDate,endDate,type,planStart,planEnd,order:maxOrder+1,done:0,completedAt:null,color:selColor,phase:isPeriod?"pending":undefined,startedAt:null,endedAt:null});
+    state.tasks.push({id:uid(),name,desc,date:start,endDate:end,type:"period",repeat,planStart,planEnd,order:maxOrder+1,done:0,completedAt:null,color:selColor,phase:undefined,startedAt:null,endedAt:null});
   }
   saveState();closeModal("modal-task");render();
 });
@@ -1693,6 +1705,9 @@ function renderFriendTimeline(container,items){
 setInterval(()=>{ if(mqttReady) publishMyState(); }, 20000);
 
 function initFriends(){ connectMQTT(); }
+
+/* 时间输入框的「✕」清除按钮：一键取消已设的开始/结束时间 */
+document.querySelectorAll(".time-clear").forEach(b=>b.addEventListener("click",()=>{ const el=document.getElementById(b.dataset.clear); if(el)el.value=""; }));
 
 /* startup */
 switchRoute("countdown");
