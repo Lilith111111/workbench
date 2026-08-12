@@ -268,9 +268,63 @@
   .mood-note-wrap textarea{width:100%;min-height:58px;border:2px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px;resize:vertical;box-sizing:border-box;font-family:inherit;}
   .mood-confirm{margin-top:14px;width:100%;}
   .btn:disabled{opacity:.45;pointer-events:none;}
+  /* ---------- 我的 / 好友 ---------- */
+  .me-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-soft);padding:18px;margin:10px 18px 6px;}
+  .me-top{display:flex;align-items:center;gap:14px;}
+  .me-avatar{width:64px;height:64px;border-radius:50%;background:#F1ECFB;display:flex;align-items:center;justify-content:center;font-size:30px;cursor:pointer;overflow:hidden;flex-shrink:0;border:2px solid var(--line);}
+  .me-avatar img{width:100%;height:100%;object-fit:cover;}
+  .me-info{flex:1;min-width:0;}
+  .me-name-input{font-size:19px;font-weight:900;color:var(--text);border:none;background:transparent;width:100%;font-family:inherit;padding:2px 0;}
+  .me-name-input:focus{outline:none;border-bottom:1px solid var(--primary);}
+  .me-sign-input{font-size:13px;color:var(--muted);border:none;background:transparent;width:100%;font-family:inherit;margin-top:4px;padding:2px 0;}
+  .me-sign-input:focus{outline:none;}
+  .me-room{display:flex;align-items:center;gap:8px;margin-top:14px;background:#F7F3FE;border-radius:12px;padding:10px 12px;}
+  .me-room label{font-size:12px;color:var(--muted);font-weight:800;white-space:nowrap;}
+  .me-room input{flex:1;border:none;background:transparent;font-family:inherit;font-weight:800;color:var(--text);font-size:14px;min-width:0;}
+  .me-room input:focus{outline:none;}
+  .me-room .btn-soft{padding:6px 12px;font-size:13px;}
+  .conn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;margin-top:10px;}
+  .conn .dot{width:8px;height:8px;border-radius:50%;background:#CBD5E1;}
+  .conn.on .dot{background:#34D399;}
+  .conn.off .dot{background:#F87171;}
+  .friends-title{font-size:15px;font-weight:900;color:var(--text);margin:18px 18px 8px;}
+  .friend-grid{display:flex;flex-direction:column;gap:10px;padding:0 18px 14px;}
+  .friend-chip{display:flex;align-items:center;gap:12px;background:#fff;border-radius:18px;box-shadow:var(--shadow-soft);padding:12px 14px;cursor:pointer;transition:transform .12s;}
+  .friend-chip:active{transform:scale(0.98);}
+  .friend-ava{width:46px;height:46px;border-radius:50%;background:#F1ECFB;display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0;}
+  .friend-ava img{width:100%;height:100%;object-fit:cover;}
+  .friend-meta{flex:1;min-width:0;}
+  .friend-name{font-size:16px;font-weight:800;color:var(--text);}
+  .friend-sign{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .friend-arrow{color:var(--muted);font-size:18px;flex-shrink:0;}
+  .empty-friends{text-align:center;color:var(--muted);font-size:13px;padding:8px 18px 20px;line-height:1.6;}
+  .fd-head{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .fd-head .friend-ava{width:52px;height:52px;font-size:24px;}
+  .fd-name{font-size:18px;font-weight:900;}
+  .fd-sign{font-size:12px;color:var(--muted);}
+  .fd-sub{font-size:13px;color:var(--muted);font-weight:800;margin:14px 0 10px;}
+  /* 好友动态弹窗：可往上拉展开 + 内容可滚动 */
+  .modal-grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:2px auto 10px;flex:none;cursor:grab;touch-action:none;}
+  .modal-grip:active{cursor:grabbing;}
+  #modal-friend .modal-card{display:flex;flex-direction:column;overflow:hidden;}
+  #modal-friend .modal-head{position:static;background:transparent;padding-bottom:0;}
+  #modal-friend #fd-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
 </style>
 <link rel="apple-touch-icon" href="./icon-512.png">
-<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});}</script>
+<script>
+  /* 仅在生产域名启用 Service Worker（离线缓存）；本地/LAN 预览不启用，避免预览被缓存导致“改了不刷新” */
+  if ("serviceWorker" in navigator) {
+    var _h = location.hostname;
+    var _local = _h === "localhost" || _h === "127.0.0.1" ||
+                 /^192\.168\./.test(_h) || /^10\./.test(_h) ||
+                 /^172\.(1[6-9]|2\d|3[01])\./.test(_h);
+    if (!_local) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
+  }
+</script>
 </head>
 <body>
 <div id="app">
@@ -290,7 +344,7 @@
 
     <!-- CALENDAR -->
     <section class="view" id="view-calendar">
-      <div class="cal-header expanded" id="cal-header">
+      <div class="cal-header" id="cal-header">
         <div class="cal-top">
           <h1 class="cal-title" id="cal-title">今天</h1>
           <div class="cal-actions">
@@ -308,7 +362,7 @@
 
     <!-- STATS -->
     <section class="view" id="view-stats">
-      <div class="view-head"><h1>统计</h1></div>
+      <div class="view-head"><h1>我的</h1></div>
       <div class="view-body st-list" id="st-list"></div>
     </section>
 
@@ -320,7 +374,7 @@
     <button class="nav-item active" data-route="countdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>倒计时</span></button>
     <button class="nav-item" data-route="checkin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg><span>打卡</span></button>
     <button class="nav-item" data-route="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>日历</span></button>
-    <button class="nav-item" data-route="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span>统计</span></button>
+    <button class="nav-item" data-route="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg><span>我的</span></button>
   </nav>
 </div>
 
@@ -380,6 +434,13 @@
   <button class="btn btn-primary mood-confirm" id="mood-confirm" type="button" disabled>确定</button>
 </div></div>
 
+<div class="modal" id="modal-friend"><div class="modal-card">
+  <div class="modal-grip" id="fd-grip" title="往上拖动可展开"></div>
+  <div class="modal-head"><h2>好友动态</h2><button class="modal-close" data-close>×</button></div>
+  <div id="fd-body"></div>
+</div></div>
+<input type="file" id="me-avatar-input" accept="image/*" hidden>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 /* ============ Helpers ============ */
 const pad=n=>String(n).padStart(2,"0");
@@ -454,19 +515,29 @@ function checkinDateText(c){
   }
   return "每日打卡";
 }
-/* 时间窗口：不设置开始时间 → 随时可打卡；支持跨午夜（如 21:00-02:00） */
+/* 时间窗口：开始/结束可只设其一；都不设 → 随时可打卡；支持跨午夜（如 21:00-02:00） */
 function inTimeWindow(c){
-  if(!c.wStart) return true;
-  const now=nowHM();
   const s=c.wStart, e=c.wEnd;
-  if(!e||e===s) return timeMin(now)>=timeMin(s);
-  if(e>s) return timeMin(now)>=timeMin(s) && timeMin(now)<=timeMin(e);
-  return timeMin(now)>=timeMin(s) || timeMin(now)<=timeMin(e);
+  if(!s){ // 没设开始时间
+    if(!e) return true;                  // 开始/结束都没设 → 随时可打卡
+    return timeMin(nowHM())<=timeMin(e); // 只设结束 → 结束时间前可打卡
+  }
+  const now=nowHM();
+  if(!e||e===s) return timeMin(now)>=timeMin(s); // 只设开始(或起止相同) → 开始后可打卡
+  if(e>s) return timeMin(now)>=timeMin(s) && timeMin(now)<=timeMin(e); // 同日窗口
+  return timeMin(now)>=timeMin(s) || timeMin(now)<=timeMin(e);         // 跨午夜窗口
 }
 function canPunch(c){ return checkinOnDay(c, dateKey(selDate)) && inTimeWindow(c); }
 function checkinBlockedMsg(c){
   if(!checkinOnDay(c, dateKey(selDate))) return "该打卡不在设定的日期内，无法打卡";
   return "未到打卡时间（"+(c.wStart||"")+(c.wEnd?("-"+c.wEnd):"")+"），暂不能打卡";
+}
+/* 打卡卡片右下角的时间窗口提示：只设开始→几点之后；只设结束→几点之前；都设→起止 */
+function windowHint(c){
+  if(c.wStart && c.wEnd) return c.wStart+"–"+c.wEnd;
+  if(c.wStart) return c.wStart+" 之后";
+  if(c.wEnd) return c.wEnd+" 之前";
+  return "";
 }
 
 /* ============ Storage v5 ============ */
@@ -474,12 +545,22 @@ const STORE_KEY="wb_data_v5";
 let state=loadState();
 let route="countdown";
 let selDate=new Date();
-let calExpanded=true;
+let calExpanded=false;
 let editingId=null, editingType=null;
 let pendingCheckin=null;
 let selectedMood=null;
 
 function migrateState(s){
+  /* 一次性迁移：把默认「起床/睡觉」的时间窗改成新默认（只跑一次，之后用户可自行改） */
+  try{
+    if(!localStorage.getItem("wb_mig_window_v1")){
+      s.checkins.forEach(c=>{
+        if(c.isDefault && c.name==="起床"){ c.wStart=""; c.wEnd="08:00"; }
+        if(c.isDefault && c.name==="睡觉"){ c.wStart=""; c.wEnd="23:00"; }
+      });
+      localStorage.setItem("wb_mig_window_v1","1");
+    }
+  }catch(e){}
   s.countdowns=s.countdowns||[];
   s.checkins=s.checkins||[];
   s.tasks=s.tasks||[];
@@ -494,7 +575,7 @@ function migrateState(s){
     c.isDefault=!!c.isDefault;
     if(typeof c.order!=="number") c.order=c.isDefault?i:100+i;
     if(typeof c.daily!=="number") c.daily=1;
-    c.wStart=c.wStart||"08:00"; c.wEnd=c.wEnd||"";
+    if(c.wStart===undefined) c.wStart="08:00"; if(c.wEnd===undefined) c.wEnd="";
     if(typeof c.repeat!=="string") c.repeat="daily";
     if(!c.start) c.start=tk;
     if(!c.end) c.end=dateKey(new Date(Date.now()+365*86400000));
@@ -556,8 +637,8 @@ function initState(){
   return{
     countdowns:[],
     checkins:[
-      {id:uid(),name:"起床",start:today,end:far,daily:1,repeat:"daily",wStart:"06:00",wEnd:"12:00",records:{},showInTimeline:true,isDefault:true,order:0,color:"yellow"},
-      {id:uid(),name:"睡觉",start:today,end:far,daily:1,repeat:"daily",wStart:"21:00",wEnd:"02:00",records:{},showInTimeline:true,isDefault:true,order:1,color:"yellow"}
+      {id:uid(),name:"起床",start:today,end:far,daily:1,repeat:"daily",wStart:"",wEnd:"08:00",records:{},showInTimeline:true,isDefault:true,order:0,color:"yellow"},
+      {id:uid(),name:"睡觉",start:today,end:far,daily:1,repeat:"daily",wStart:"",wEnd:"23:00",records:{},showInTimeline:true,isDefault:true,order:1,color:"yellow"}
     ],
     tasks:[]
   };
@@ -628,12 +709,12 @@ function renderCheckins(){
     const complete=!isMulti && done>=c.daily;
     const punchable=canPunch(c);
     const checkInner=isMulti?"+1":(complete?"✓":"");
-    const windowText=c.wStart?("预计 "+c.wStart+(c.wEnd?("-"+c.wEnd):"")):"";
+    const wHint=windowHint(c);
     let leftTxt=checkinDateText(c);
     let metaL2="";
-    if(c.wStart){ // 设置了时间 → 右下角显示时间（预计窗口/未到时间）
+    if(wHint){ // 设置了时间窗口 → 右下角显示窗口（之后/之前/起止）
       if(isMulti) leftTxt+=" "+done+"/"+c.daily;
-      metaL2=complete?windowText:(punchable?windowText:"未到打卡时间");
+      metaL2=wHint;
     }else{ // 未设置时间 → 右下角显示打卡时间（实际打卡时刻）
       if(isMulti) leftTxt+=" "+done+"/"+c.daily;
       metaL2=recs.length?("打卡 "+recs[recs.length-1].time):"尚未打卡";
@@ -910,12 +991,12 @@ function makeRoutineItem(it){
     : `<div class="tl-axis${!it.lastPending?" bridge":""}"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(c.wStart)||"--"}${c.wEnd?("-"+trimH(c.wEnd)):""}</div><div class="tl-dot light mid"></div></div>`;
   const titleHTML = done && it.emoji ? `${esc(c.name)} <span class="tl-mood-inline"><span class="tl-mood-emoji">${it.emoji}</span>${esc(it.moodText)}</span>` : esc(c.name);
   const noteBelow = done && it.note ? `<div class="tl-note">${esc(it.note)}</div>` : "";
-  const windowText=c.wStart?("预计 "+c.wStart+(c.wEnd?("-"+c.wEnd):"")):"";
+  const wHint=windowHint(c);
   let leftTxt=checkinDateText(c);
   let metaL2="";
-  if(c.wStart){ // 设置了时间 → 右下角显示时间（预计窗口/未到时间）
+  if(wHint){ // 设置了时间窗口 → 右下角显示窗口（之后/之前/起止）
     if(isMulti&&!done) leftTxt+=" "+recs.length+"/"+c.daily;
-    metaL2=done?windowText:(punchable?windowText:"未到打卡时间");
+    metaL2=wHint;
   }else{ // 未设置时间 → 右下角显示打卡时间（实际打卡时刻）
     if(isMulti&&!done) leftTxt+=" "+recs.length+"/"+c.daily;
     metaL2=done?("打卡 "+it.time):"尚未打卡";
@@ -1008,61 +1089,12 @@ function isTaskDone(t){
 /* ============ Stats ============ */
 function renderStats(){
   const el=document.getElementById("st-list");
-  const[a,b]=weekRange(new Date());
-  let weekCi=0, monthCi=0;
-  state.checkins.filter(c=>c.repeat==='daily').forEach(c=>{
-    for(const k in c.records){
-      const t=parseKey(k).getTime();
-      const n=c.records[k].length;
-      if(t>=a.getTime()&&t<b.getTime())weekCi+=n;
-      const[ma,mb]=monthRange(new Date());
-      if(t>=ma.getTime()&&t<mb.getTime())monthCi+=n;
-    }
-  });
-  const today=dateKey(new Date());
-  const dayTasks=state.tasks.filter(t=>taskOnDay(t,today));
-  const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
-  const pendingTasks=dayTasks.length-doneTasks;
-  const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
-
-  el.innerHTML=`<div class="st-card">
-      <div class="st-title">任务完成率</div>
-      <div class="st-sub">已完成 ${doneTasks} / 共 ${dayTasks.length}</div>
-      <div class="st-pie-wrap">
-        <div class="st-pie">
-          <svg viewBox="0 0 160 160"><defs><linearGradient id="pieGrad" x1="18%" y1="0%" x2="82%" y2="100%"><stop offset="0%" stop-color="#8E5BE6"/><stop offset="55%" stop-color="#A878F0"/><stop offset="100%" stop-color="#CDA6FB"/></linearGradient><filter id="pieGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#9B72EF" flood-opacity="0.40"/></filter></defs><circle cx="80" cy="80" r="60" fill="none" stroke="#EFE9FA" stroke-width="18"/><circle cx="80" cy="80" r="60" fill="none" stroke="url(#pieGrad)" stroke-width="18" stroke-linejoin="round" stroke-dasharray="${(377*pct/100).toFixed(1)} 377" stroke-linecap="${pct===0?'butt':'round'}" filter="url(#pieGlow)"/></svg>
-          <div class="st-pie-center"><big>${pct}%</big><small>完成率</small></div>
-        </div>
-      </div>
-      <div class="st-legend"><div class="st-legend-item"><div class="st-legend-dot" style="background:#9B72EF"></div><span>已完成 ${doneTasks}</span></div><div class="st-legend-item"><div class="st-legend-dot" style="background:#EDE6FF"></div><span>未完成 ${pendingTasks}</span></div></div>
-    </div>
-    <div class="st-card">
-      <div class="st-title">打卡明细</div>
-      <div class="st-sub">按打卡统计本周</div>
-      <div id="st-ci-list"></div>
-    </div>
-    <div class="st-card">
-      <div class="st-title">数据管理</div>
-      <div class="st-sub">换地址前先导出备份，导入即可恢复数据</div>
-      <div class="dm-row">
-        <button class="btn btn-soft" id="btn-export" type="button">导出备份</button>
-        <button class="btn btn-soft" id="btn-import" type="button">导入备份</button>
-      </div>
-      <input type="file" id="dm-file" accept="application/json,.json" hidden>
-    </div>`;
-  document.getElementById("btn-export").addEventListener("click",exportData);
-  document.getElementById("btn-import").addEventListener("click",()=>document.getElementById("dm-file").click());
-  document.getElementById("dm-file").addEventListener("change",e=>{ if(e.target.files&&e.target.files[0]) importData(e.target.files[0]); e.target.value=""; });
-  const ciList=document.getElementById("st-ci-list");
-  const list=state.checkins.filter(c=>c.repeat==='daily').slice().sort((a,b)=>a.order-b.order);
-  ciList.innerHTML=list.map(c=>{
-    let w=0;for(const k in c.records){const t=parseKey(k).getTime();if(t>=a.getTime()&&t<b.getTime())w+=c.records[k].length;}
-    const todayRecs=c.records[today]||[];
-    return `<div class="st-ci-row">
-      <div><div class="st-ci-name">${esc(c.name)}</div><div class="st-ci-meta">今日 ${todayRecs.length}/${c.daily}</div></div>
-      <div class="st-ci-num">${w}<span style="font-size:12px;color:var(--muted);">次/周</span></div>
-    </div>`;
-  }).join("");
+  const p=loadProfile();
+  el.innerHTML=meCardHTML(p)+`<div class="friends-title">好友</div><div id="friends-wrap">${friendsHTML()}</div>`;
+  bindMeCard(p);
+  el.insertAdjacentHTML("beforeend",statsCardsHTML());
+  bindStatsCards();
+  maybeAutoPublish();
 }
 
 /* ============ Actions ============ */
@@ -1376,8 +1408,279 @@ function confettiAtEl(el,count){
   });
 })();
 
+/* ============ 我的 / 好友（MQTT 实时同步，公共 broker，零注册零密钥） ============ */
+const MQTT_URL="wss://broker.emqx.io:8084/mqtt";
+const PROFILE_KEY="wb_profile_v1";
+const FRIENDS_KEY="wb_friends_cache_v1";
+let profile=loadProfile();
+let friendsCache=loadFriendsCache();
+let mqttClient=null, mqttReady=false;
+let publishTimer=null;
+
+function loadProfile(){
+  try{ const raw=localStorage.getItem(PROFILE_KEY); if(raw){const p=JSON.parse(raw); if(p&&p.userId){
+    try{ if(!localStorage.getItem("wb_mig_room_v1")){ p.roomCode="admission"; localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); localStorage.setItem("wb_mig_room_v1","1"); } }catch(e){}
+    return p;
+  }} }catch(e){}
+  const p={userId:uid(), roomCode:"admission", nickname:"", signature:"", avatar:""};
+  try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); }catch(e){}
+  return p;
+}
+function saveProfile(p){ profile=p; try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); }catch(e){} }
+function loadFriendsCache(){ try{ return JSON.parse(localStorage.getItem(FRIENDS_KEY))||{}; }catch(e){ return {}; } }
+function saveFriendsCache(){ try{ localStorage.setItem(FRIENDS_KEY,JSON.stringify(friendsCache)); }catch(e){} }
+
+function meCardHTML(p){
+  const av=p.avatar?`<img src="${p.avatar}" alt="">`:`👤`;
+  return `<div class="me-card">
+    <div class="me-top">
+      <div class="me-avatar" id="me-avatar">${av}</div>
+      <div class="me-info">
+        <input class="me-name-input" id="me-name" maxlength="12" placeholder="起个昵称" value="${esc(p.nickname)}">
+        <input class="me-sign-input" id="me-sign" maxlength="40" placeholder="个性签名（可留空）" value="${esc(p.signature)}">
+      </div>
+    </div>
+    <div class="me-room">
+      <label>房间码</label>
+      <input id="me-room" maxlength="20" value="${esc(p.roomCode)}">
+      <button class="btn btn-soft" id="me-room-save" type="button">连接</button>
+    </div>
+    <div class="conn off" id="me-conn"><span class="dot"></span><span id="me-conn-text">未连接</span></div>
+  </div>`;
+}
+function friendsHTML(){
+  const fs=Object.values(friendsCache);
+  if(!fs.length) return `<div class="empty-friends">还没有好友～ 房间码默认是 admission，让朋友也用 admission 就能互看彼此的动态啦</div>`;
+  fs.sort((a,b)=>(a.nickname||"").localeCompare(b.nickname||""));
+  return `<div class="friend-grid">`+fs.map(f=>{
+    const av=f.avatar?`<img src="${f.avatar}" alt="">`:`👤`;
+    return `<div class="friend-chip" data-uid="${esc(f.userId)}">
+      <div class="friend-ava">${av}</div>
+      <div class="friend-meta"><div class="friend-name">${esc(f.nickname||"好友")}</div>${f.signature?`<div class="friend-sign">${esc(f.signature)}</div>`:""}</div>
+      <div class="friend-arrow">›</div>
+    </div>`;
+  }).join("")+`</div>`;
+}
+function bindMeCard(p){
+  const av=document.getElementById("me-avatar");
+  if(av) av.addEventListener("click",()=>document.getElementById("me-avatar-input").click());
+  const fi=document.getElementById("me-avatar-input");
+  if(fi) fi.onchange=e=>{
+    const file=e.target.files&&e.target.files[0]; if(!file)return;
+    const r=new FileReader();
+    r.onload=()=>{ const img=new Image(); img.onload=()=>{
+        const s=96, cv=document.createElement("canvas"); cv.width=s; cv.height=s;
+        const ctx=cv.getContext("2d"); ctx.drawImage(img,0,0,s,s);
+        const data=cv.toDataURL("image/jpeg",0.72);
+        p.avatar=data; saveProfile(p); if(av)av.innerHTML=`<img src="${data}" alt="">`; publishMyState();
+      }; img.src=r.result; };
+    r.readAsDataURL(file); e.target.value="";
+  };
+  const nameI=document.getElementById("me-name"), signI=document.getElementById("me-sign");
+  if(nameI) nameI.addEventListener("input",()=>{ p.nickname=nameI.value; saveProfile(p); debouncePublish(); });
+  if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
+  const roomSave=document.getElementById("me-room-save");
+  if(roomSave) roomSave.addEventListener("click",()=>{
+    const v=document.getElementById("me-room").value.trim();
+    if(v&&v!==p.roomCode){ p.roomCode=v; saveProfile(p); }
+    connectMQTT();
+  });
+  bindFriendClicks();
+}
+function bindFriendClicks(){
+  document.querySelectorAll(".friend-chip").forEach(ch=>ch.addEventListener("click",()=>openFriendDetail(ch.dataset.uid)));
+}
+function statsCardsHTML(){
+  const today=dateKey(new Date());
+  const dayTasks=state.tasks.filter(t=>taskOnDay(t,today));
+  const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
+  const pendingTasks=dayTasks.length-doneTasks;
+  const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
+  return `<div class="st-card">
+      <div class="st-title">任务完成率</div>
+      <div class="st-sub">已完成 ${doneTasks} / 共 ${dayTasks.length}</div>
+      <div class="st-pie-wrap"><div class="st-pie">
+        <svg viewBox="0 0 160 160"><defs><linearGradient id="pieGrad" x1="18%" y1="0%" x2="82%" y2="100%"><stop offset="0%" stop-color="#8E5BE6"/><stop offset="55%" stop-color="#A878F0"/><stop offset="100%" stop-color="#CDA6FB"/></linearGradient><filter id="pieGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#9B72EF" flood-opacity="0.40"/></filter></defs><circle cx="80" cy="80" r="60" fill="none" stroke="#EFE9FA" stroke-width="18"/><circle cx="80" cy="80" r="60" fill="none" stroke="url(#pieGrad)" stroke-width="18" stroke-linejoin="round" stroke-dasharray="${(377*pct/100).toFixed(1)} 377" stroke-linecap="${pct===0?'butt':'round'}" filter="url(#pieGlow)"/></svg>
+        <div class="st-pie-center"><big>${pct}%</big><small>完成率</small></div>
+      </div></div>
+      <div class="st-legend"><div class="st-legend-item"><div class="st-legend-dot" style="background:#9B72EF"></div><span>已完成 ${doneTasks}</span></div><div class="st-legend-item"><div class="st-legend-dot" style="background:#EDE6FF"></div><span>未完成 ${pendingTasks}</span></div></div>
+    </div>
+    <div class="st-card">
+      <div class="st-title">打卡明细</div>
+      <div class="st-sub">按打卡统计本周</div>
+      <div id="st-ci-list"></div>
+    </div>
+    <div class="st-card">
+      <div class="st-title">数据管理</div>
+      <div class="st-sub">换地址前先导出备份，导入即可恢复数据</div>
+      <div class="dm-row">
+        <button class="btn btn-soft" id="btn-export" type="button">导出备份</button>
+        <button class="btn btn-soft" id="btn-import" type="button">导入备份</button>
+      </div>
+      <input type="file" id="dm-file" accept="application/json,.json" hidden>
+    </div>`;
+}
+function bindStatsCards(){
+  const ex=document.getElementById("btn-export"), im=document.getElementById("btn-import"), df=document.getElementById("dm-file");
+  if(ex) ex.addEventListener("click",exportData);
+  if(im) im.addEventListener("click",()=>df&&df.click());
+  if(df) df.addEventListener("change",e=>{ if(e.target.files&&e.target.files[0]) importData(e.target.files[0]); e.target.value=""; });
+  const[a,b]=weekRange(new Date()); const aT=a.getTime(), bT=b.getTime();
+  const ciList=document.getElementById("st-ci-list");
+  if(!ciList)return;
+  const list=state.checkins.filter(c=>c.repeat==='daily').slice().sort((x,y)=>x.order-y.order);
+  const today=dateKey(new Date());
+  ciList.innerHTML=list.map(c=>{
+    let w=0;for(const k in c.records){const t=parseKey(k).getTime();if(t>=aT&&t<bT)w+=c.records[k].length;}
+    const todayRecs=c.records[today]||[];
+    return `<div class="st-ci-row"><div><div class="st-ci-name">${esc(c.name)}</div><div class="st-ci-meta">今日 ${todayRecs.length}/${c.daily}</div></div><div class="st-ci-num">${w}<span style="font-size:12px;color:var(--muted);">次/周</span></div></div>`;
+  }).join("");
+}
+
+/* ---- 当天时间轴序列化（仅同步清单，不同步原始数据） ---- */
+function buildDayTimeline(k){
+  const items=[];
+  const tls=state.checkins.filter(c=>c.showInTimeline && checkinOnDay(c,k)).sort((a,b)=>{ if(a.isDefault&&!b.isDefault)return -1; if(!a.isDefault&&b.isDefault)return 1; return a.order-b.order; });
+  tls.forEach(c=>{
+    const recs=c.records[k]||[];
+    if(recs.length){ recs.forEach(r=>items.push({kind:"checkin",done:true,name:c.name,color:c.color||"yellow",time:r.time||"",mood:r.mood||"",emoji:MOODS[r.mood]||"",note:r.note||""})); }
+    else items.push({kind:"checkin",done:false,name:c.name,color:c.color||"yellow",wStart:c.wStart||"",wEnd:c.wEnd||""});
+  });
+  const dayTasks=state.tasks.filter(t=>taskOnDay(t,k)).sort((a,b)=>a.order-b.order);
+  dayTasks.forEach(t=>{
+    const done=isTaskDone(t);
+    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,planStart:t.planStart||"",planEnd:t.planEnd||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase});
+  });
+  return items;
+}
+function myPayload(){
+  const k=dateKey(new Date());
+  return {v:1,userId:profile.userId,nickname:profile.nickname,signature:profile.signature,avatar:profile.avatar,updatedAt:Date.now(),timeline:buildDayTimeline(k)};
+}
+function publishMyState(){
+  if(!mqttReady||!mqttClient){ return; }
+  const topic="workbench/"+profile.roomCode+"/"+profile.userId;
+  try{ mqttClient.publish(topic, JSON.stringify(myPayload()), {retain:true,qos:1}, ()=>{}); }catch(e){}
+}
+function debouncePublish(){ if(publishTimer)clearTimeout(publishTimer); publishTimer=setTimeout(publishMyState,700); }
+function maybeAutoPublish(){ if(mqttReady) publishMyState(); }
+
+function connectMQTT(){
+  if(typeof mqtt==="undefined"){ setConn("off","未连接（无法加载同步库）"); return; }
+  try{ if(mqttClient){ mqttClient.end(true); } }catch(e){}
+  setConn("off","连接中…");
+  let client;
+  try{
+    client=mqtt.connect(MQTT_URL,{clientId:"wb_"+uid(),clean:true,reconnectPeriod:3000,connectTimeout:8000});
+  }catch(e){ setConn("off","连接失败"); return; }
+  mqttClient=client;
+  client.on("connect",()=>{
+    mqttReady=true; setConn("on","已连接 · 实时同步");
+    const topic="workbench/"+profile.roomCode+"/+";
+    try{ client.subscribe(topic,{qos:1},()=>{}); }catch(e){}
+    publishMyState();
+  });
+  client.on("message",(topic,msg)=>{
+    try{
+      const d=JSON.parse(msg.toString());
+      if(!d||!d.userId||d.userId===profile.userId)return;
+      friendsCache[d.userId]=d; saveFriendsCache();
+      if(route==="stats"){ const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); } }
+    }catch(e){}
+  });
+  client.on("error",()=>{ mqttReady=false; setConn("off","连接失败"); });
+  client.on("close",()=>{ mqttReady=false; setConn("off","已断开，重试中"); });
+  client.on("reconnect",()=>{ setConn("off","连接中…"); });
+}
+function setConn(cls,text){
+  const el=document.getElementById("me-conn"), t=document.getElementById("me-conn-text");
+  if(el){ el.className="conn "+cls; if(t)t.textContent=text; }
+}
+function openFriendDetail(uid){
+  const f=friendsCache[uid]; if(!f)return;
+  const av=f.avatar?`<img src="${f.avatar}" alt="">`:`👤`;
+  const body=document.getElementById("fd-body");
+  body.innerHTML=`<div class="fd-head"><div class="friend-ava">${av}</div><div><div class="fd-name">${esc(f.nickname||"好友")}</div>${f.signature?`<div class="fd-sign">${esc(f.signature)}</div>`:""}</div></div><div class="fd-sub">${esc(f.nickname||"好友")} 今天的动态</div><div id="fd-timeline" style="padding:0 4px"></div>`;
+  renderFriendTimeline(document.getElementById("fd-timeline"), f.timeline||[]);
+  openModal("modal-friend");
+}
+function renderFriendTimeline(container,items){
+  container.innerHTML="";
+  if(!items||!items.length){ container.innerHTML='<div class="empty">对方今天还没有安排</div>'; return; }
+  const doneTimeOf=it=>{ if(it.kind==="checkin")return it.time||"23:59"; if(it.type==="period")return it.endedAt||hhmm(it.completedAt); return hhmm(it.completedAt); };
+  const plannedTimeOf=it=>{ if(it.kind==="checkin")return timeMin(it.wStart||"23:59"); return timeMin(it.planStart||"23:59"); };
+  const doneItems=items.filter(i=>i.done).sort((a,b)=>timeMin(doneTimeOf(a))-timeMin(doneTimeOf(b)));
+  const pendingItems=items.filter(i=>!i.done).sort((a,b)=>plannedTimeOf(a)-plannedTimeOf(b));
+  const make=it=>{
+    const div=document.createElement("div"); div.className="tl-item";
+    if(it.kind==="checkin"){
+      const trimH=t=>(t||"").replace(/^0/,"");
+      const axis=it.done
+        ? `<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${it.time||"--"}</div><div class="tl-dot mid"></div></div>`
+        : `<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(it.wStart)||"--"}${it.wEnd?("-"+trimH(it.wEnd)):""}</div><div class="tl-dot light mid"></div></div>`;
+      const titleHTML=it.done&&it.emoji?`${esc(it.name)} <span class="tl-mood-inline"><span class="tl-mood-emoji">${it.emoji}</span>${esc(it.mood)}</span>`:esc(it.name);
+      const noteBelow=it.done&&it.note?`<div class="tl-note">${esc(it.note)}</div>`:"";
+      const metaR=it.done?`<span class="tl-meta-l2">打卡 ${it.time||""}</span>`:`<span class="tl-meta-l2">尚未打卡</span>`;
+      div.innerHTML=axis+`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">打卡</span>${metaR}</div>${noteBelow}</div>`;
+    }else{
+      const isPoint=(it.type==="point"||it.type==="single");
+      const axis=it.done
+        ? `<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${hhmm(it.completedAt)}</div><div class="tl-dot mid"></div></div>`
+        : `<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${isPoint?(it.planStart||"--"):((it.planStart||"--")+"~"+(it.planEnd||"--"))}</div><div class="tl-dot light mid"></div></div>`;
+      div.innerHTML=axis+`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskPlannedText(it)}</span></div></div>`;
+    }
+    const card=div.querySelector(".tl-card"); if(card)applyCardColor(card,it.color);
+    return div;
+  };
+  doneItems.forEach(it=>container.appendChild(make(it)));
+  if(pendingItems.length){
+    const d=document.createElement("div"); d.className="tl-divider"; d.textContent="未完成"; container.appendChild(d);
+    pendingItems.forEach(it=>container.appendChild(make(it)));
+  }
+}
+
+/* 好友动态弹窗：往上拖动把手可展开，松手吸附；默认高度下方内容可滚动 */
+(function(){
+  const modal=document.getElementById("modal-friend");
+  if(!modal)return;
+  const card=modal.querySelector(".modal-card");
+  const grip=document.getElementById("fd-grip");
+  if(!card||!grip)return;
+  let dragging=false, startY=0, baseMax=0;
+  const vh=()=>window.innerHeight/100;
+  grip.addEventListener("pointerdown",e=>{
+    dragging=true; startY=e.clientY;
+    baseMax=parseFloat(getComputedStyle(card).maxHeight)||(window.innerHeight*0.92);
+    card.style.transition="none";
+    try{ grip.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  grip.addEventListener("pointermove",e=>{
+    if(!dragging)return;
+    const dy=startY-e.clientY;            // 往上拖 → 正数 → 展开
+    let nh=baseMax+dy;
+    const minH=window.innerHeight*0.55, maxH=window.innerHeight*0.98;
+    nh=Math.max(minH,Math.min(maxH,nh));
+    card.style.maxHeight=nh+"px";
+  });
+  const end=()=>{ if(!dragging)return; dragging=false; card.style.transition=""; };
+  grip.addEventListener("pointerup",end);
+  grip.addEventListener("pointercancel",end);
+  /* 每次打开重置为默认高度（92dvh），可重新拖拽展开 */
+  const _open=openModal;
+  openModal=function(id){ _open(id); if(id==="modal-friend") card.style.maxHeight=""; };
+})();
+
+/* 保存即同步（不改任何原有逻辑，仅补充发布） */
+(function(){ const orig=saveState; saveState=function(){ orig(); debouncePublish(); }; })();
+
+/* 心跳：保持好友视图新鲜 */
+setInterval(()=>{ if(mqttReady) publishMyState(); }, 20000);
+
+function initFriends(){ connectMQTT(); }
+
 /* startup */
 switchRoute("countdown");
+initFriends();
 </script>
 </body>
 </html>
