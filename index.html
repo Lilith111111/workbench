@@ -532,8 +532,8 @@ function checkinDateText(c){
   }
   if(c.repeat==="range"){
     const a=parseKey(c.start), b=parseKey(c.end);
-    if(a.getMonth()===b.getMonth()) return `从${a.getDate()}号到${b.getDate()}号`;
-    return `从${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号`;
+    if(a.getMonth()===b.getMonth()) return `${a.getDate()}号到${b.getDate()}号`;
+    return `${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号`;
   }
   return "每日打卡";
 }
@@ -875,7 +875,7 @@ function renderCalendar(){
     if(done){
       items.push({type:"task-done",order:0,time,time2,title:t.name,color:t.color||"yellow",sub:t.desc||"已完成",emoji:"",cls:"",id:t.id,data:t});
     }else{
-      items.push({type:"task-pending",order:2,time,time2,title:t.name,color:t.color||"yellow",sub:t.desc||(isPoint?("预计 "+time):("预计 "+time+"-"+time2)),emoji:"",cls:"",id:t.id,data:t});
+      items.push({type:"task-pending",order:2,time,time2,title:t.name,color:t.color||"yellow",sub:t.desc||(isPoint?(time):(time+"-"+time2)),emoji:"",cls:"",id:t.id,data:t});
     }
   });
 
@@ -941,12 +941,12 @@ function taskDateRangeText(t){
     return (t.date===dateKey(new Date()))?"当日任务":`${parseKey(t.date).getMonth()+1}月${parseKey(t.date).getDate()}日任务`;
   }
   const a=parseKey(t.date), b=parseKey(t.endDate);
-  if(a.getMonth()===b.getMonth()) return `从${a.getDate()}号到${b.getDate()}号`;
-  return `从${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号`;
+  if(a.getMonth()===b.getMonth()) return `${a.getDate()}号到${b.getDate()}号`;
+  return `${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号`;
 }
 function taskPlannedText(t){
   const isPoint=(t.type==="point"||t.type==="single");
-  return isPoint?`预计 ${t.planStart||"--"}`:`预计 ${t.planStart||"--"}-${t.planEnd||"--"}`;
+  return isPoint?`${t.planStart||"--"}`:`${t.planStart||"--"}-${t.planEnd||"--"}`;
 }
 function fmtDur(ms){
   const m=Math.max(0,Math.round((ms||0)/60000));
@@ -959,7 +959,7 @@ function taskMetaRight(it){
   const done=(it.type==="period") ? (it.phase==="done") : (it.done>=1 || it.done===true);
   if(done) return "进行 "+fmtDur(it.workMs||0);
   const isPoint=(it.type==="point"||it.type==="single");
-  return isPoint?`预计 ${it.planStart||"--"}`:`预计 ${it.planStart||"--"}-${it.planEnd||"--"}`;
+  return isPoint?`${it.planStart||"--"}`:`${it.planStart||"--"}-${it.planEnd||"--"}`;
 }
 function taskAxisHTML(t,lastDone,lastPending){
   const done=isTaskDone(t);
