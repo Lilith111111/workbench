@@ -997,7 +997,9 @@ function makeRoutineItem(it){
   const trimH=t=>(t||"").replace(/^0/,"");
   const axis=done
     ? `<div class="tl-axis${done&&!it.lastDone?" bridge":""}"><div class="tl-rail"></div><div class="tl-t done mid">${it.time||"--"}</div><div class="tl-dot mid"></div></div>`
-    : `<div class="tl-axis${!it.lastPending?" bridge":""}"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(c.wStart)||"--"}${c.wEnd?("-"+trimH(c.wEnd)):""}</div><div class="tl-dot light mid"></div></div>`;
+    : (c.wStart && c.wEnd)
+      ? `<div class="tl-axis${!it.lastPending?" bridge":""}"><div class="tl-rail light"></div><div class="tl-t plan top">${trimH(c.wStart)}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${trimH(c.wEnd)}</div><div class="tl-dot light bottom"></div></div>`
+      : `<div class="tl-axis${!it.lastPending?" bridge":""}"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(c.wStart)||trimH(c.wEnd)||"--"}</div><div class="tl-dot light mid"></div></div>`;
   const titleHTML = done && it.emoji ? `${esc(c.name)} <span class="tl-mood-inline"><span class="tl-mood-emoji">${it.emoji}</span>${esc(it.moodText)}</span>` : esc(c.name);
   const noteBelow = done && it.note ? `<div class="tl-note">${esc(it.note)}</div>` : "";
   const wHint=windowHint(c);
@@ -1640,35 +1642,27 @@ function renderFriendTimeline(container,items){
   const plannedTimeOf=it=>{ if(it.kind==="checkin")return timeMin(it.wStart||"23:59"); return timeMin(it.planStart||"23:59"); };
   const doneItems=items.filter(i=>i.done).sort((a,b)=>timeMin(doneTimeOf(a))-timeMin(doneTimeOf(b)));
   const pendingItems=items.filter(i=>!i.done).sort((a,b)=>plannedTimeOf(a)-plannedTimeOf(b));
-  const make=it=>{
-    const div=document.createElement("div"); div.className="tl-item";
+  const friendAxis=(it,bridge)=>{
     const trimH=t=>(t||"").replace(/^0/,"");
-    /* 时间段（同时有开始+结束两个时间）→ 时间轴上下显示（开始在上、结束在下）；只有一个时间 → 居中 */
-    let axis;
+    const cls=bridge?" bridge":"";
     if(it.kind==="checkin"){
-      if(it.done){
-        axis=`<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${it.time||"--"}</div><div class="tl-dot mid"></div></div>`;
-      }else if(it.wStart && it.wEnd){
-        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan top">${trimH(it.wStart)}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${trimH(it.wEnd)}</div><div class="tl-dot light bottom"></div></div>`;
-      }else{
-        const s=it.wStart||it.wEnd||"--";
-        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(s)}</div><div class="tl-dot light mid"></div></div>`;
-      }
-    }else{
-      const isPoint=(it.type==="point"||it.type==="single");
-      if(it.done){
-        if(!isPoint && it.startedAt && it.endedAt){
-          axis=`<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done top">${it.startedAt}</div><div class="tl-dot top"></div><div class="tl-t done bottom">${it.endedAt}</div><div class="tl-dot bottom"></div></div>`;
-        }else{
-          axis=`<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${hhmm(it.completedAt)}</div><div class="tl-dot mid"></div></div>`;
-        }
-      }else if(!isPoint && it.planStart && it.planEnd){
-        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan top">${it.planStart}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${it.planEnd}</div><div class="tl-dot light bottom"></div></div>`;
-      }else{
-        const s=isPoint?(it.planStart||"--"):(it.planStart||"--");
-        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${s}</div><div class="tl-dot light mid"></div></div>`;
-      }
+      if(it.done) return `<div class="tl-axis${cls}"><div class="tl-rail"></div><div class="tl-t done mid">${it.time||"--"}</div><div class="tl-dot mid"></div></div>`;
+      if(it.wStart && it.wEnd) return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan top">${trimH(it.wStart)}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${trimH(it.wEnd)}</div><div class="tl-dot light bottom"></div></div>`;
+      const s=it.wStart||it.wEnd||"--";
+      return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(s)}</div><div class="tl-dot light mid"></div></div>`;
     }
+    const isPoint=(it.type==="point"||it.type==="single");
+    if(it.done){
+      if(!isPoint && it.startedAt && it.endedAt) return `<div class="tl-axis${cls}"><div class="tl-rail"></div><div class="tl-t done top">${it.startedAt}</div><div class="tl-dot top"></div><div class="tl-t done bottom">${it.endedAt}</div><div class="tl-dot bottom"></div></div>`;
+      return `<div class="tl-axis${cls}"><div class="tl-rail"></div><div class="tl-t done mid">${hhmm(it.completedAt)}</div><div class="tl-dot mid"></div></div>`;
+    }
+    if(!isPoint && it.planStart && it.planEnd) return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan top">${it.planStart}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${it.planEnd}</div><div class="tl-dot light bottom"></div></div>`;
+    const s=it.planStart||"--";
+    return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan mid">${s}</div><div class="tl-dot light mid"></div></div>`;
+  };
+  const make=(it,bridge)=>{
+    const div=document.createElement("div"); div.className="tl-item";
+    const axis=friendAxis(it,bridge);
     let cardHTML;
     if(it.kind==="checkin"){
       const titleHTML=it.done&&it.emoji?`${esc(it.name)} <span class="tl-mood-inline"><span class="tl-mood-emoji">${it.emoji}</span>${esc(it.mood)}</span>`:esc(it.name);
@@ -1684,10 +1678,10 @@ function renderFriendTimeline(container,items){
     const card=div.querySelector(".tl-card"); if(card)applyCardColor(card,it.color);
     return div;
   };
-  doneItems.forEach(it=>container.appendChild(make(it)));
+  doneItems.forEach((it,i)=>container.appendChild(make(it, i<doneItems.length-1)));
   if(pendingItems.length){
     const d=document.createElement("div"); d.className="tl-divider"; d.textContent="未完成"; container.appendChild(d);
-    pendingItems.forEach(it=>container.appendChild(make(it)));
+    pendingItems.forEach((it,i)=>container.appendChild(make(it, i<pendingItems.length-1)));
   }
 }
 
