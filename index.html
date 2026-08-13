@@ -220,8 +220,13 @@
   .tl-check.disabled{opacity:.45;cursor:not-allowed;background:#EEEFF3;border-color:rgba(185,185,195,.45);}
   .tl-btn{border:none;border-radius:14px;padding:8px 16px;font-size:14px;font-weight:800;font-family:inherit;cursor:pointer;transition:all .15s;}
   .tl-btn.start{background:#fff;color:var(--primary-dark);border:2px solid var(--primary);}
+  .tl-btn.pause{background:#fff;color:#d97706;border:2px solid #d97706;}
+  .tl-btn.resume{background:#fff;color:var(--primary-dark);border:2px solid var(--primary);}
   .tl-btn.end{background:var(--primary-dark);color:#fff;}
+  .tl-action-slot{display:flex;gap:6px;justify-content:flex-end;align-items:center;}
   .tl-divider{text-align:center;font-size:13px;color:var(--muted);font-weight:800;margin:22px 0 16px;position:relative;}
+  .tl-summary{margin:4px 0 16px;padding:10px 14px;background:var(--primary-light);border:1px dashed var(--primary);border-radius:14px;font-size:13px;font-weight:800;color:var(--primary-dark);display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;}
+  .tl-summary b{font-size:15px;color:var(--primary-dark);}
   .tl-divider::before,.tl-divider::after{content:"";position:absolute;top:50%;height:1px;background:var(--line);width:30%;}
   .tl-divider::before{left:0;}
   .tl-divider::after{right:0;}
@@ -239,17 +244,26 @@
   /* ---------- Stats view ---------- */
   .st-list{padding:10px 18px 22px;}
   .st-card{background:var(--card);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-soft);margin-bottom:14px;}
-  .st-title{font-size:17px;font-weight:900;margin-bottom:2px;}
+  .st-title{font-size:17px;font-weight:700;margin-bottom:2px;}
   .st-sub{font-size:13px;color:var(--muted);font-weight:700;margin-bottom:14px;}
   .st-row{display:flex;gap:12px;flex-wrap:wrap;}
   .st-item{flex:1;min-width:100px;background:var(--primary-light);border-radius:18px;padding:14px;text-align:center;}
   .st-item .num{font-size:26px;font-weight:900;color:var(--primary-dark);}
   .st-item .label{font-size:12px;color:var(--muted);font-weight:800;margin-top:4px;}
   .st-pie-wrap{display:flex;align-items:center;justify-content:center;padding:16px 0 10px;}
-  .st-pie{position:relative;width:160px;height:160px;}
-  .st-pie svg{width:160px;height:160px;transform:rotate(-90deg);}
+  .st-pie{position:relative;width:184px;height:184px;}
+  .st-pie svg{width:184px;height:184px;transform:rotate(-90deg);}
   .st-pie-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-  .st-pie-center big{font-size:42px;font-weight:900;color:var(--primary-dark);line-height:1;}
+  .st-pie-center big{font-size:40px;font-weight:900;color:var(--primary-dark);line-height:1;white-space:nowrap;}
+  .st-trend{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);}
+  .st-trend-title{font-size:13px;font-weight:800;color:var(--muted);margin-bottom:8px;text-align:center;}
+  .st-trend svg{display:block;width:100%;height:auto;}
+  .st-trend-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .st-trend-title{font-size:13px;font-weight:800;color:var(--muted);margin-bottom:0;text-align:center;flex:1;}
+  .trend-nav{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--primary-dark);font-size:20px;line-height:1;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,opacity .15s;padding:0;}
+  .trend-nav:active{background:var(--primary-light);}
+  .trend-nav:disabled{opacity:.35;cursor:default;}
+  .st-trend-range{font-size:11px;font-weight:700;color:var(--muted);text-align:center;margin-bottom:6px;}
   .st-pie-center small{font-size:13px;color:var(--muted);font-weight:800;margin-top:4px;}
   .st-legend{display:flex;justify-content:center;gap:18px;margin-top:16px;}
   .st-legend-item{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;}
@@ -597,6 +611,9 @@ function migrateState(s){
     t.color=t.color||"yellow";
     if(typeof t.order!=="number") t.order=i;
     if(t.type==="period"&&!t.phase) t.phase="pending";
+    if(t.runStart===undefined) t.runStart=null;
+    if(t.workMs===undefined) t.workMs=0;
+    if(t.phase==="started") t.runStart=Date.now(); /* 重开页面后从此时起计，离线间隙不计入工时 */
     t.planStart=t.planStart||"";
     t.planEnd=t.planEnd||"";
     if(typeof t.done!=="number") t.done=0;
@@ -884,6 +901,15 @@ function renderCalendar(){
   const safeAppend=(parent,it)=>{ try{ parent.appendChild(it.kind==="checkin"?makeRoutineItem(it):makeTaskCard(it)); }catch(e){ console.error("render item failed",e); } };
   doneItems.forEach(it=>safeAppend(body,it));
 
+  // 已完成任务总计时（仅统计有进行时长的时间段任务）
+  const donePeriodTasks=state.tasks.filter(t=>taskOnDay(t,k)&&isTaskDone(t)&&t.type==="period"&&(t.workMs||0)>0);
+  if(doneItems.length&&donePeriodTasks.length){
+    const totalMs=donePeriodTasks.reduce((s,t)=>s+(t.workMs||0),0);
+    const sum=document.createElement("div"); sum.className="tl-summary";
+    sum.innerHTML=`已完成任务合计 · 进行 <b>${fmtDur(totalMs)}</b>`;
+    body.appendChild(sum);
+  }
+
   if(pendingItems.length){
     const div=document.createElement("div");div.className="tl-divider";div.textContent="未完成";body.appendChild(div);
     const pendingWrap=document.createElement("div");pendingWrap.id="pending-list";
@@ -921,6 +947,19 @@ function taskPlannedText(t){
   const isPoint=(t.type==="point"||t.type==="single");
   return isPoint?`预计 ${t.planStart||"--"}`:`预计 ${t.planStart||"--"}-${t.planEnd||"--"}`;
 }
+function fmtDur(ms){
+  const m=Math.max(0,Math.round((ms||0)/60000));
+  if(m<60) return m+"分钟";
+  const h=Math.floor(m/60), mm=m%60;
+  return mm? (h+"小时"+mm+"分") : (h+"小时");
+}
+/* 卡片右下角文案：任务完成（移到上方时间轴）后显示「进行 X时Y分」（已扣暂停）；未完成显示预计时间 */
+function taskMetaRight(it){
+  const done=(it.type==="period") ? (it.phase==="done") : (it.done>=1 || it.done===true);
+  if(done) return "进行 "+fmtDur(it.workMs||0);
+  const isPoint=(it.type==="point"||it.type==="single");
+  return isPoint?`预计 ${it.planStart||"--"}`:`预计 ${it.planStart||"--"}-${it.planEnd||"--"}`;
+}
 function taskAxisHTML(t,lastDone,lastPending){
   const done=isTaskDone(t);
   if(done){
@@ -933,7 +972,7 @@ function taskAxisHTML(t,lastDone,lastPending){
     return ax+`<div class="tl-rail"></div><div class="tl-t done mid">${hhmm(t.completedAt)}</div><div class="tl-dot mid"></div></div>`;
   }
   const isPoint=(t.type==="point"||t.type==="single");
-  const started=(t.type==="period"&&t.phase==="started"&&t.startedAt);
+  const started=(t.type==="period"&&(t.phase==="started"||t.phase==="paused")&&t.startedAt);
   const label=isPoint?(t.planStart||"--"):`${t.planStart||"--"}~${t.planEnd||"--"}`;
   const bridge=lastPending?"":" bridge";
   if(!isPoint){
@@ -947,25 +986,40 @@ function taskAxisHTML(t,lastDone,lastPending){
 function taskActionHTML(t){
   if(t.type==="period"){
     if(t.phase==="done") return `<div class="tl-check checked" data-action="none"></div>`;
-    if(t.phase==="started") return `<button type="button" class="tl-btn end" data-action="end">结束</button>`;
+    if(t.phase==="started") return `<button type="button" class="tl-btn pause" data-action="pause">暂停</button><button type="button" class="tl-btn end" data-action="end">结束</button>`;
+    if(t.phase==="paused") return `<button type="button" class="tl-btn resume" data-action="resume">继续</button><button type="button" class="tl-btn end" data-action="end">结束</button>`;
     return `<button type="button" class="tl-btn start" data-action="start">开始</button>`;
   }
   return `<div class="tl-check ${isTaskDone(t)?"checked":""}" data-action="toggle"></div>`;
 }
 function bindTaskAction(slot,t){
-  const a=slot.querySelector("[data-action]"); if(!a)return;
-  const act=a.dataset.action;
-  if(act==="toggle") a.addEventListener("click",e=>{e.stopPropagation();toggleTaskDone(t.id,a);});
-  else if(act==="start") a.addEventListener("click",e=>{e.stopPropagation();startPeriodTask(t.id);});
-  else if(act==="end") a.addEventListener("click",e=>{e.stopPropagation();endPeriodTask(t.id);});
+  slot.querySelectorAll("[data-action]").forEach(a=>{
+    const act=a.dataset.action;
+    if(act==="toggle") a.addEventListener("click",e=>{e.stopPropagation();toggleTaskDone(t.id,a);});
+    else if(act==="start") a.addEventListener("click",e=>{e.stopPropagation();startPeriodTask(t.id);});
+    else if(act==="pause") a.addEventListener("click",e=>{e.stopPropagation();pausePeriodTask(t.id);});
+    else if(act==="resume") a.addEventListener("click",e=>{e.stopPropagation();resumePeriodTask(t.id);});
+    else if(act==="end") a.addEventListener("click",e=>{e.stopPropagation();endPeriodTask(t.id);});
+  });
 }
 function startPeriodTask(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  t.phase="started"; t.startedAt=hhmmNow(); saveState(); render();
+  t.phase="started"; t.runStart=Date.now(); t.workMs=0; t.startedAt=hhmmNow(); saveState(); render();
+}
+function pausePeriodTask(id){
+  const t=state.tasks.find(x=>x.id===id);if(!t)return;
+  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; }
+  t.phase="paused"; saveState(); render();
+}
+function resumePeriodTask(id){
+  const t=state.tasks.find(x=>x.id===id);if(!t)return;
+  if(t.phase==="paused"){ t.phase="started"; t.runStart=Date.now(); }
+  saveState(); render();
 }
 function endPeriodTask(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  if(t.phase!=="started") t.phase="started";
+  if(t.phase!=="started"&&t.phase!=="paused"){ t.phase="started"; t.runStart=Date.now(); t.workMs=0; }
+  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; }
   if(!t.startedAt) t.startedAt=hhmmNow();
   t.phase="done"; t.endedAt=hhmmNow(); saveState(); render();
 }
@@ -978,7 +1032,7 @@ function makeTaskCard(it){
         `<div class="tl-name">${esc(t.name)}</div>`+
         `<div class="tl-action-slot">${taskActionHTML(t)}</div>`+
       `</div>`+
-      `<div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(t)}</span><span class="tl-meta-l2">${taskPlannedText(t)}</span></div>`+
+      `<div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(t)}</span><span class="tl-meta-l2">${taskMetaRight(t)}</span></div>`+
     `</div>`;
   const card=div.querySelector(".tl-card");
   applyCardColor(card,t.color);
@@ -1313,7 +1367,7 @@ document.getElementById("task-save").addEventListener("click",()=>{
     t.name=name;t.type="period";t.desc=desc;t.planStart=planStart;t.planEnd=planEnd;t.repeat=repeat;t.date=start;t.endDate=end;t.color=selColor;
   }else{
     const maxOrder=state.tasks.reduce((m,x)=>Math.max(m,x.order||0),0);
-    state.tasks.push({id:uid(),name,desc,date:start,endDate:end,type:"period",repeat,planStart,planEnd,order:maxOrder+1,done:0,completedAt:null,color:selColor,phase:undefined,startedAt:null,endedAt:null});
+    state.tasks.push({id:uid(),name,desc,date:start,endDate:end,type:"period",repeat,planStart,planEnd,order:maxOrder+1,done:0,completedAt:null,color:selColor,phase:undefined,startedAt:null,endedAt:null,runStart:null,workMs:0});
   }
   saveState();closeModal("modal-task");render();
 });
@@ -1520,20 +1574,75 @@ function clearGhostFriends(){
   const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
   publishMyState();
 }
+/* 近一周每日完成任务总时长折线图（可左右翻看前后周）；口径与日历页「已完成任务合计」一致：已完成的时间段任务 workMs 之和 */
+let trendOffset=0; /* 0=含今天的最近一周；负数=更早的周；next 按钮在 >=0 时禁用（不显示未来） */
+function trendHTML(offset){
+  const mon=trendMonday(offset);
+  const days=[];
+  for(let i=0;i<7;i++){ const d=new Date(mon); d.setDate(d.getDate()+i); days.push(dateKey(d)); }
+  const labels=days.map(d=>{const dt=new Date(d+"T00:00:00");return (dt.getMonth()+1)+"/"+dt.getDate();});
+  const vals=days.map(d=>state.tasks.filter(t=>taskOnDay(t,d)&&isTaskDone(t)&&t.type==="period"&&(t.workMs||0)>0).reduce((s,t)=>s+(t.workMs||0),0));
+  const max=Math.max.apply(null,vals.concat([1]));
+  const W=420,H=104,padX=40,padTop=30,plotH=44,baseY=padTop+plotH;
+  const stepX=days.length>1?(W-2*padX)/(days.length-1):0;
+  const xs=days.map((_,i)=>padX+i*stepX);
+  const yOf=v=>baseY-(max>0?(v/max)*plotH:0);
+  const ptStr=vals.map((v,i)=>`${xs[i].toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
+  let dots="",valLabels="",dateLabels="";
+  for(let i=0;i<days.length;i++){
+    const x=xs[i],y=yOf(vals[i]);
+    dots+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#A878F0" stroke="#fff" stroke-width="2"/>`;
+    const vy=Math.max(y-9,12);
+    valLabels+=`<text x="${x.toFixed(1)}" y="${vy.toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#7C3AED">${fmtDur(vals[i])}</text>`;
+    dateLabels+=`<text x="${x.toFixed(1)}" y="${(baseY+16).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#9AA0AC">${labels[i]}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="xMidYMid meet">
+    <line x1="${padX}" y1="${baseY}" x2="${(W-padX).toFixed(1)}" y2="${baseY}" stroke="#EDE6FF" stroke-width="2"/>
+    <polyline points="${ptStr}" fill="none" stroke="#A878F0" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${valLabels}${dateLabels}
+  </svg>`;
+}
+function trendMonday(offset){
+  const now=new Date();
+  const dow=now.getDay(); /* 0=Sun,1=Mon..6=Sat */
+  const back=(dow+6)%7; /* 距本周一的天数 */
+  const mon=new Date(now); mon.setDate(mon.getDate()-back + 7*offset);
+  return mon;
+}
+function trendRangeText(offset){
+  const mon=trendMonday(offset);
+  const a=new Date(mon), b=new Date(mon); b.setDate(b.getDate()+6);
+  const f=x=>(x.getMonth()+1)+"/"+x.getDate();
+  return f(a)+" – "+f(b);
+}
+function updateTrend(){
+  const svg=document.getElementById("trend-svg"); if(svg) svg.innerHTML=trendHTML(trendOffset);
+  const rg=document.getElementById("trend-range"); if(rg) rg.textContent=trendRangeText(trendOffset);
+  const nx=document.getElementById("trend-next"); if(nx) nx.disabled=(trendOffset>=0);
+}
 function statsCardsHTML(){
   const today=dateKey(new Date());
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,today));
   const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
   const pendingTasks=dayTasks.length-doneTasks;
   const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
-  return `<div class="st-card">
-      <div class="st-title">任务完成率</div>
+  return `    <div class="st-card">
+      <div class="st-title">任务完成情况</div>
       <div class="st-sub">已完成 ${doneTasks} / 共 ${dayTasks.length}</div>
       <div class="st-pie-wrap"><div class="st-pie">
         <svg viewBox="0 0 160 160"><defs><linearGradient id="pieGrad" x1="18%" y1="0%" x2="82%" y2="100%"><stop offset="0%" stop-color="#8E5BE6"/><stop offset="55%" stop-color="#A878F0"/><stop offset="100%" stop-color="#CDA6FB"/></linearGradient><filter id="pieGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#9B72EF" flood-opacity="0.40"/></filter></defs><circle cx="80" cy="80" r="60" fill="none" stroke="#EFE9FA" stroke-width="18"/><circle cx="80" cy="80" r="60" fill="none" stroke="url(#pieGrad)" stroke-width="18" stroke-linejoin="round" stroke-dasharray="${(377*pct/100).toFixed(1)} 377" stroke-linecap="${pct===0?'butt':'round'}" filter="url(#pieGlow)"/></svg>
         <div class="st-pie-center"><big>${pct}%</big><small>完成率</small></div>
       </div></div>
       <div class="st-legend"><div class="st-legend-item"><div class="st-legend-dot" style="background:#9B72EF"></div><span>已完成 ${doneTasks}</span></div><div class="st-legend-item"><div class="st-legend-dot" style="background:#EDE6FF"></div><span>未完成 ${pendingTasks}</span></div></div>
+      <div class="st-trend">
+        <div class="st-trend-head">
+          <button class="trend-nav" id="trend-prev" type="button" aria-label="更早一周">‹</button>
+          <div class="st-trend-title">近一周完成时长</div>
+          <button class="trend-nav" id="trend-next" type="button" aria-label="更晚一周"${trendOffset>=0?' disabled':''}>›</button>
+        </div>
+        <div class="st-trend-range" id="trend-range">${trendRangeText(trendOffset)}</div>
+        <div id="trend-svg">${trendHTML(trendOffset)}</div>
+      </div>
     </div>
     <div class="st-card">
       <div class="st-title">打卡明细</div>
@@ -1555,6 +1664,9 @@ function bindStatsCards(){
   if(ex) ex.addEventListener("click",exportData);
   if(im) im.addEventListener("click",()=>df&&df.click());
   if(df) df.addEventListener("change",e=>{ if(e.target.files&&e.target.files[0]) importData(e.target.files[0]); e.target.value=""; });
+  const prev=document.getElementById("trend-prev"), next=document.getElementById("trend-next");
+  if(prev) prev.addEventListener("click",()=>{ trendOffset--; updateTrend(); });
+  if(next) next.addEventListener("click",()=>{ if(trendOffset<0){ trendOffset++; updateTrend(); } });
   const[a,b]=weekRange(new Date()); const aT=a.getTime(), bT=b.getTime();
   const ciList=document.getElementById("st-ci-list");
   if(!ciList)return;
@@ -1580,7 +1692,7 @@ function buildDayTimeline(k){
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,k)).sort((a,b)=>a.order-b.order);
   dayTasks.forEach(t=>{
     const done=isTaskDone(t);
-    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",startedAt:t.startedAt||"",endedAt:t.endedAt||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase});
+    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",startedAt:t.startedAt||"",endedAt:t.endedAt||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase,workMs:t.workMs||0});
   });
   return items;
 }
@@ -1672,13 +1784,21 @@ function renderFriendTimeline(container,items){
       const metaR=wHint?`<span class="tl-meta-l2">${wHint}</span>`:(it.done?`<span class="tl-meta-l2">打卡 ${it.time||""}</span>`:`<span class="tl-meta-l2">尚未打卡</span>`);
       cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${leftTxt}</span>${metaR}</div>${noteBelow}</div>`;
     }else{
-      cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskPlannedText(it)}</span></div></div>`;
+      cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskMetaRight(it)}</span></div></div>`;
     }
     div.innerHTML=axis+cardHTML;
     const card=div.querySelector(".tl-card"); if(card)applyCardColor(card,it.color);
     return div;
   };
   doneItems.forEach((it,i)=>container.appendChild(make(it, i<doneItems.length-1)));
+  // 对方已完成任务总计时
+  const fdDoneTasks=doneItems.filter(it=>it.kind==="task"&&it.type==="period"&&it.phase==="done"&&(it.workMs||0)>0);
+  if(doneItems.length&&fdDoneTasks.length){
+    const totalMs=fdDoneTasks.reduce((s,it)=>s+(it.workMs||0),0);
+    const sum=document.createElement("div"); sum.className="tl-summary";
+    sum.innerHTML=`已完成任务合计 · 进行 <b>${fmtDur(totalMs)}</b>`;
+    container.appendChild(sum);
+  }
   if(pendingItems.length){
     const d=document.createElement("div"); d.className="tl-divider"; d.textContent="未完成"; container.appendChild(d);
     pendingItems.forEach((it,i)=>container.appendChild(make(it, i<pendingItems.length-1)));
