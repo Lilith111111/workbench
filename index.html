@@ -1578,7 +1578,7 @@ function buildDayTimeline(k){
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,k)).sort((a,b)=>a.order-b.order);
   dayTasks.forEach(t=>{
     const done=isTaskDone(t);
-    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase});
+    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",startedAt:t.startedAt||"",endedAt:t.endedAt||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase});
   });
   return items;
 }
@@ -1642,24 +1642,45 @@ function renderFriendTimeline(container,items){
   const pendingItems=items.filter(i=>!i.done).sort((a,b)=>plannedTimeOf(a)-plannedTimeOf(b));
   const make=it=>{
     const div=document.createElement("div"); div.className="tl-item";
+    const trimH=t=>(t||"").replace(/^0/,"");
+    /* 时间段（同时有开始+结束两个时间）→ 时间轴上下显示（开始在上、结束在下）；只有一个时间 → 居中 */
+    let axis;
     if(it.kind==="checkin"){
-      const trimH=t=>(t||"").replace(/^0/,"");
-      const axis=it.done
-        ? `<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${it.time||"--"}</div><div class="tl-dot mid"></div></div>`
-        : `<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(it.wStart)||"--"}${it.wEnd?("-"+trimH(it.wEnd)):""}</div><div class="tl-dot light mid"></div></div>`;
+      if(it.done){
+        axis=`<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${it.time||"--"}</div><div class="tl-dot mid"></div></div>`;
+      }else if(it.wStart && it.wEnd){
+        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan top">${trimH(it.wStart)}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${trimH(it.wEnd)}</div><div class="tl-dot light bottom"></div></div>`;
+      }else{
+        const s=it.wStart||it.wEnd||"--";
+        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(s)}</div><div class="tl-dot light mid"></div></div>`;
+      }
+    }else{
+      const isPoint=(it.type==="point"||it.type==="single");
+      if(it.done){
+        if(!isPoint && it.startedAt && it.endedAt){
+          axis=`<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done top">${it.startedAt}</div><div class="tl-dot top"></div><div class="tl-t done bottom">${it.endedAt}</div><div class="tl-dot bottom"></div></div>`;
+        }else{
+          axis=`<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${hhmm(it.completedAt)}</div><div class="tl-dot mid"></div></div>`;
+        }
+      }else if(!isPoint && it.planStart && it.planEnd){
+        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan top">${it.planStart}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${it.planEnd}</div><div class="tl-dot light bottom"></div></div>`;
+      }else{
+        const s=isPoint?(it.planStart||"--"):(it.planStart||"--");
+        axis=`<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${s}</div><div class="tl-dot light mid"></div></div>`;
+      }
+    }
+    let cardHTML;
+    if(it.kind==="checkin"){
       const titleHTML=it.done&&it.emoji?`${esc(it.name)} <span class="tl-mood-inline"><span class="tl-mood-emoji">${it.emoji}</span>${esc(it.mood)}</span>`:esc(it.name);
       const noteBelow=it.done&&it.note?`<div class="tl-note">${esc(it.note)}</div>`:"";
       const leftTxt=checkinDateText(it);
       const wHint=windowHint(it);
       const metaR=wHint?`<span class="tl-meta-l2">${wHint}</span>`:(it.done?`<span class="tl-meta-l2">打卡 ${it.time||""}</span>`:`<span class="tl-meta-l2">尚未打卡</span>`);
-      div.innerHTML=axis+`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${leftTxt}</span>${metaR}</div>${noteBelow}</div>`;
+      cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${leftTxt}</span>${metaR}</div>${noteBelow}</div>`;
     }else{
-      const isPoint=(it.type==="point"||it.type==="single");
-      const axis=it.done
-        ? `<div class="tl-axis"><div class="tl-rail"></div><div class="tl-t done mid">${hhmm(it.completedAt)}</div><div class="tl-dot mid"></div></div>`
-        : `<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${isPoint?(it.planStart||"--"):((it.planStart||"--")+"~"+(it.planEnd||"--"))}</div><div class="tl-dot light mid"></div></div>`;
-      div.innerHTML=axis+`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskPlannedText(it)}</span></div></div>`;
+      cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskPlannedText(it)}</span></div></div>`;
     }
+    div.innerHTML=axis+cardHTML;
     const card=div.querySelector(".tl-card"); if(card)applyCardColor(card,it.color);
     return div;
   };
