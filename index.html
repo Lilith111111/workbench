@@ -322,7 +322,8 @@
   .fd-head .friend-ava{width:52px;height:52px;font-size:24px;}
   .fd-name{font-size:18px;font-weight:900;}
   .fd-sign{font-size:12px;color:var(--muted);}
-  .fd-sub{font-size:13px;color:var(--muted);font-weight:800;margin:14px 0 10px;}
+  .fd-sub{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:800;margin:14px 0 10px;}
+  .fd-dur{background:var(--primary-light);color:var(--primary-dark);border:1px solid var(--primary);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:900;white-space:nowrap;}
   /* 好友动态弹窗：可往上拉展开 + 内容可滚动 */
   .modal-grip{width:44px;height:5px;border-radius:3px;background:var(--line);margin:2px auto 10px;flex:none;cursor:grab;touch-action:none;}
   .modal-grip:active{cursor:grabbing;}
@@ -531,8 +532,8 @@ function checkinDateText(c){
   }
   if(c.repeat==="range"){
     const a=parseKey(c.start), b=parseKey(c.end);
-    if(a.getMonth()===b.getMonth()) return `从${a.getDate()}号到${b.getDate()}号打卡`;
-    return `从${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号打卡`;
+    if(a.getMonth()===b.getMonth()) return `从${a.getDate()}号到${b.getDate()}号`;
+    return `从${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号`;
   }
   return "每日打卡";
 }
@@ -940,8 +941,8 @@ function taskDateRangeText(t){
     return (t.date===dateKey(new Date()))?"当日任务":`${parseKey(t.date).getMonth()+1}月${parseKey(t.date).getDate()}日任务`;
   }
   const a=parseKey(t.date), b=parseKey(t.endDate);
-  if(a.getMonth()===b.getMonth()) return `从${a.getDate()}号到${b.getDate()}号的任务`;
-  return `从${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号的任务`;
+  if(a.getMonth()===b.getMonth()) return `从${a.getDate()}号到${b.getDate()}号`;
+  return `从${a.getMonth()+1}月${a.getDate()}号到${b.getMonth()+1}月${b.getDate()}号`;
 }
 function taskPlannedText(t){
   const isPoint=(t.type==="point"||t.type==="single");
@@ -1742,8 +1743,10 @@ function setConn(cls,text){
 function openFriendDetail(uid){
   const f=friendsCache[uid]; if(!f)return;
   const av=f.avatar?`<img src="${f.avatar}" alt="">`:`👤`;
+  const fdItems=f.timeline||[];
+  const fdTotal=fdItems.filter(it=>it.kind==="task"&&it.type==="period"&&it.phase==="done"&&(it.workMs||0)>0).reduce((s,it)=>s+(it.workMs||0),0);
   const body=document.getElementById("fd-body");
-  body.innerHTML=`<div class="fd-head"><div class="friend-ava">${av}</div><div><div class="fd-name">${esc(f.nickname||"好友")}</div>${f.signature?`<div class="fd-sign">${esc(f.signature)}</div>`:""}</div></div><div class="fd-sub">${esc(f.nickname||"好友")} 今天的动态</div><div id="fd-timeline" style="padding:0 4px"></div>`;
+  body.innerHTML=`<div class="fd-head"><div class="friend-ava">${av}</div><div><div class="fd-name">${esc(f.nickname||"好友")}</div>${f.signature?`<div class="fd-sign">${esc(f.signature)}</div>`:""}</div></div><div class="fd-sub"><span>${esc(f.nickname||"好友")} 今天的动态</span><span class="fd-dur">${fmtDur(fdTotal)}</span></div><div id="fd-timeline" style="padding:0 4px"></div>`;
   renderFriendTimeline(document.getElementById("fd-timeline"), f.timeline||[]);
   openModal("modal-friend");
 }
