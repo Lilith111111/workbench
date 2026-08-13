@@ -1571,13 +1571,14 @@ function buildDayTimeline(k){
   const tls=state.checkins.filter(c=>c.showInTimeline && checkinOnDay(c,k)).sort((a,b)=>{ if(a.isDefault&&!b.isDefault)return -1; if(!a.isDefault&&b.isDefault)return 1; return a.order-b.order; });
   tls.forEach(c=>{
     const recs=c.records[k]||[];
-    if(recs.length){ recs.forEach(r=>items.push({kind:"checkin",done:true,name:c.name,color:c.color||"yellow",time:r.time||"",mood:r.mood||"",emoji:MOODS[r.mood]||"",note:r.note||""})); }
-    else items.push({kind:"checkin",done:false,name:c.name,color:c.color||"yellow",wStart:c.wStart||"",wEnd:c.wEnd||""});
+    const base={kind:"checkin",done:false,name:c.name,color:c.color||"yellow",wStart:c.wStart||"",wEnd:c.wEnd||"",repeat:c.repeat,start:c.start,end:c.end};
+    if(recs.length){ recs.forEach(r=>items.push(Object.assign({},base,{done:true,time:r.time||"",mood:r.mood||"",emoji:MOODS[r.mood]||"",note:r.note||""}))); }
+    else items.push(base);
   });
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,k)).sort((a,b)=>a.order-b.order);
   dayTasks.forEach(t=>{
     const done=isTaskDone(t);
-    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,planStart:t.planStart||"",planEnd:t.planEnd||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase});
+    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase});
   });
   return items;
 }
@@ -1648,8 +1649,10 @@ function renderFriendTimeline(container,items){
         : `<div class="tl-axis"><div class="tl-rail light"></div><div class="tl-t plan mid">${trimH(it.wStart)||"--"}${it.wEnd?("-"+trimH(it.wEnd)):""}</div><div class="tl-dot light mid"></div></div>`;
       const titleHTML=it.done&&it.emoji?`${esc(it.name)} <span class="tl-mood-inline"><span class="tl-mood-emoji">${it.emoji}</span>${esc(it.mood)}</span>`:esc(it.name);
       const noteBelow=it.done&&it.note?`<div class="tl-note">${esc(it.note)}</div>`:"";
-      const metaR=it.done?`<span class="tl-meta-l2">打卡 ${it.time||""}</span>`:`<span class="tl-meta-l2">尚未打卡</span>`;
-      div.innerHTML=axis+`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">打卡</span>${metaR}</div>${noteBelow}</div>`;
+      const leftTxt=checkinDateText(it);
+      const wHint=windowHint(it);
+      const metaR=wHint?`<span class="tl-meta-l2">${wHint}</span>`:(it.done?`<span class="tl-meta-l2">打卡 ${it.time||""}</span>`:`<span class="tl-meta-l2">尚未打卡</span>`);
+      div.innerHTML=axis+`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${leftTxt}</span>${metaR}</div>${noteBelow}</div>`;
     }else{
       const isPoint=(it.type==="point"||it.type==="single");
       const axis=it.done
