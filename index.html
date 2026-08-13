@@ -738,7 +738,10 @@ function renderCheckins(){
     const wHint=windowHint(c);
     let leftTxt=checkinDateText(c);
     let metaL2="";
-    if(wHint){ // 设置了时间窗口 → 右下角显示窗口（之后/之前/起止）
+    if(!c.showInTimeline){ // 不在时间轴显示 → 右下角始终显示打卡时间（忽略窗口提示）
+      if(isMulti) leftTxt+=" "+done+"/"+c.daily;
+      metaL2=recs.length?("打卡 "+recs[recs.length-1].time):"尚未打卡";
+    }else if(wHint){ // 设置了时间窗口 → 右下角显示窗口（之后/之前/起止）
       if(isMulti) leftTxt+=" "+done+"/"+c.daily;
       metaL2=wHint;
     }else{ // 未设置时间 → 右下角显示打卡时间（实际打卡时刻）
