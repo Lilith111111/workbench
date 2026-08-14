@@ -12,7 +12,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="工作台">
 <title>工作台</title>
-<link rel="manifest" href="./manifest.json">
 <style>
   :root{
     --bg:#F6F2FC;
@@ -331,7 +330,6 @@
   #modal-friend .modal-head{position:static;background:transparent;padding-bottom:0;}
   #modal-friend #fd-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
 </style>
-<link rel="apple-touch-icon" href="./icon-512.png">
 <script>
   /* 仅在生产域名启用 Service Worker（离线缓存）；本地/LAN 预览不启用，避免预览被缓存导致“改了不刷新” */
   if ("serviceWorker" in navigator) {
@@ -614,7 +612,11 @@ function migrateState(s){
     if(t.type==="period"&&!t.phase) t.phase="pending";
     if(t.runStart===undefined) t.runStart=null;
     if(t.workMs===undefined) t.workMs=0;
-    if(t.phase==="started") t.runStart=Date.now(); /* 重开页面后从此时起计，离线间隙不计入工时 */
+    if(t.phase==="started"){
+      /* 重开页面后接续计时：先把已进行的工时并入 workMs，再把 runStart 重置为当前时刻继续计，避免重载丢进度 */
+      if(t.runStart!=null) t.workMs=(t.workMs||0)+Math.max(0,Date.now()-t.runStart);
+      t.runStart=Date.now();
+    }
     t.planStart=t.planStart||"";
     t.planEnd=t.planEnd||"";
     if(typeof t.done!=="number") t.done=0;
@@ -958,8 +960,17 @@ function fmtDur(ms){
   return mm? (h+"小时"+mm+"分") : (h+"小时");
 }
 /* 卡片右下角文案：任务完成（移到上方时间轴）后显示「进行 X时Y分」（已扣暂停）；未完成显示预计时间 */
+function currentWorkMs(t){
+  let ms=t.workMs||0;
+  if(t.type==="period"&&t.phase==="started"&&t.runStart!=null){ ms+=Date.now()-t.runStart; }
+  return ms;
+}
 function taskMetaRight(it){
-  const done=(it.type==="period") ? (it.phase==="done") : (it.done>=1 || it.done===true);
+  const isPeriod=(it.type==="period");
+  const done=isPeriod ? (it.phase==="done") : (it.done>=1 || it.done===true);
+  if(isPeriod && (it.phase==="started"||it.phase==="paused"||it.phase==="done")){
+    return `<span class="tm-dur" data-tid="${it.id}">进行 ${fmtDur(currentWorkMs(it))}</span>`;
+  }
   if(done) return "进行 "+fmtDur(it.workMs||0);
   const isPoint=(it.type==="point"||it.type==="single");
   return isPoint?`${it.planStart||"--"}`:`${it.planStart||"--"}-${it.planEnd||"--"}`;
@@ -1847,6 +1858,17 @@ function renderFriendTimeline(container,items){
 
 /* 心跳：保持好友视图新鲜 */
 setInterval(()=>{ if(mqttReady) publishMyState(); }, 20000);
+
+/* 进行中/暂停/已完成任务的右下角计时实时刷新（每秒） */
+setInterval(()=>{
+  document.querySelectorAll(".tm-dur[data-tid]").forEach(el=>{
+    if(el.closest("#modal-friend")) return; /* 好友弹窗内为同步快照，不实时跳秒 */
+    const t=state.tasks.find(x=>x.id===el.dataset.tid);
+    if(t&&t.type==="period"&&(t.phase==="started"||t.phase==="paused"||t.phase==="done")){
+      el.textContent="进行 "+fmtDur(currentWorkMs(t));
+    }
+  });
+},1000);
 
 function initFriends(){ connectMQTT(); }
 
