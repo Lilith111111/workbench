@@ -621,10 +621,12 @@ function migrateState(s){
     if(t.type==="period"&&!t.phase) t.phase="pending";
     if(t.runStart===undefined) t.runStart=null;
     if(t.workMs===undefined) t.workMs=0;
+    if(t.lastWorkDate===undefined) t.lastWorkDate=null;
     if(t.phase==="started"){
       /* 重开页面后接续计时：先把已进行的工时并入 workMs，再把 runStart 重置为当前时刻继续计，避免重载丢进度 */
       if(t.runStart!=null) t.workMs=(t.workMs||0)+Math.max(0,Date.now()-t.runStart);
       t.runStart=Date.now();
+      t.lastWorkDate=tk;
     }
     t.planStart=t.planStart||"";
     t.planEnd=t.planEnd||"";
@@ -1032,7 +1034,7 @@ function startPeriodTask(id){
 }
 function pausePeriodTask(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; }
+  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; t.lastWorkDate=todayKey(); }
   t.phase="paused"; saveState(); render();
 }
 function resumePeriodTask(id){
@@ -1043,7 +1045,7 @@ function resumePeriodTask(id){
 function endPeriodTask(id){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
   if(t.phase!=="started"&&t.phase!=="paused"){ t.phase="started"; t.runStart=Date.now(); t.workMs=0; }
-  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; }
+  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; t.lastWorkDate=todayKey(); }
   if(!t.startedAt) t.startedAt=hhmmNow();
   t.phase="done"; t.endedAt=hhmmNow(); saveState(); render();
 }
@@ -1645,7 +1647,8 @@ function updateTrend(){
   const nx=document.getElementById("trend-next"); if(nx) nx.disabled=(trendOffset>=0);
 }
 function taskPieHTML(){
-  const tasks=state.tasks.filter(t=>(t.workMs||0)>0).sort((a,b)=>(b.workMs||0)-(a.workMs||0));
+  const tk=todayKey();
+  const tasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===tk).sort((a,b)=>(b.workMs||0)-(a.workMs||0));
   const total=tasks.reduce((s,t)=>s+(t.workMs||0),0);
   const PALETTE=["#B79CED","#8FB8F0","#8FD9B6","#F5D77A","#F2A06A","#EFA0C2","#84D2CC","#EE9B9B"];
   const colOf=i=>PALETTE[i%PALETTE.length];
@@ -1707,11 +1710,11 @@ function statsCardsHTML(){
   const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
   const pendingTasks=dayTasks.length-doneTasks;
   const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
-  const pieTasks=state.tasks.filter(t=>(t.workMs||0)>0);
+  const pieTasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===today);
   const pieTotal=pieTasks.reduce((s,t)=>s+(t.workMs||0),0);
   return `    <div class="st-card">
       <div class="st-title">任务时间分布</div>
-      <div class="st-sub">累计 ${fmtDur(pieTotal)} · 共 ${pieTasks.length} 个任务</div>
+      <div class="st-sub">今日累计 ${fmtDur(pieTotal)} · 共 ${pieTasks.length} 个任务</div>
       ${taskPieHTML()}
       <div class="st-trend">
         <div class="st-trend-head">
