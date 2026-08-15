@@ -296,36 +296,32 @@
   .mood-confirm{margin-top:14px;width:100%;}
   .btn:disabled{opacity:.45;pointer-events:none;}
   /* ---------- 我的 / 好友 ---------- */
-  .me-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-soft);padding:18px;margin:10px 18px 6px;}
-  .me-top{display:flex;align-items:center;gap:14px;}
-  .me-avatar{width:64px;height:64px;border-radius:50%;background:#F1ECFB;display:flex;align-items:center;justify-content:center;font-size:30px;cursor:pointer;overflow:hidden;flex-shrink:0;border:2px solid var(--line);}
+  .me-card{padding:0;}
+  .people-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow-soft);padding:18px;margin:0 0 14px;}
+  .me-top{display:flex;align-items:flex-start;gap:14px;}
+  .me-avatar{width:64px;height:64px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:30px;cursor:pointer;overflow:hidden;flex-shrink:0;}
   .me-avatar img{width:100%;height:100%;object-fit:cover;}
   .me-info{flex:1;min-width:0;}
+  .me-name-row{display:flex;align-items:center;gap:8px;}
+  .self-badge{font-size:11px;font-weight:900;color:#9B72EF;background:#F3EDFE;border-radius:999px;padding:2px 9px;flex-shrink:0;}
+  .me-name-row .me-name-input{flex:1;min-width:0;}
   .me-name-input{font-size:19px;font-weight:900;color:var(--text);border:none;background:transparent;width:100%;font-family:inherit;padding:2px 0;}
   .me-name-input:focus{outline:none;border-bottom:1px solid var(--primary);}
   .me-sign-input{font-size:13px;color:var(--muted);border:none;background:transparent;width:100%;font-family:inherit;margin-top:4px;padding:2px 0;}
   .me-sign-input:focus{outline:none;}
-  .me-room{display:flex;align-items:center;gap:8px;margin-top:14px;background:#F7F3FE;border-radius:12px;padding:10px 12px;}
-  .me-room label{font-size:12px;color:var(--muted);font-weight:800;white-space:nowrap;}
-  .me-room input{flex:1;border:none;background:transparent;font-family:inherit;font-weight:800;color:var(--text);font-size:14px;min-width:0;}
-  .me-room input:focus{outline:none;}
-  .me-room .btn-soft{padding:6px 12px;font-size:13px;}
-  .conn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;margin-top:10px;}
-  .conn .dot{width:8px;height:8px;border-radius:50%;background:#CBD5E1;}
-  .conn.on .dot{background:#34D399;}
-  .conn.off .dot{background:#F87171;}
-  .friends-title{font-size:15px;font-weight:900;color:var(--text);margin:18px 18px 8px;display:flex;align-items:center;justify-content:space-between;}
-  .friends-refresh{font-size:12px;font-weight:800;color:var(--purple,#9B72EF);background:#F3EDFE;border:none;border-radius:999px;padding:5px 11px;cursor:pointer;}
-  .friend-grid{display:flex;flex-direction:column;gap:10px;padding:0 18px 14px;}
-  .friend-chip{display:flex;align-items:center;gap:12px;background:#fff;border-radius:18px;box-shadow:var(--shadow-soft);padding:12px 14px;cursor:pointer;transition:transform .12s;}
+  .friends-head{display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px;}
+  .friends-head .fh-title{font-size:15px;font-weight:900;color:var(--text);}
+  .friends-refresh{font-size:12px;font-weight:800;color:var(--primary-dark);background:none;border:none;padding:4px 8px;cursor:pointer;flex-shrink:0;}
+  .friend-grid{display:flex;flex-direction:column;gap:10px;}
+  .friend-chip{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:18px;box-shadow:var(--shadow-soft);padding:12px 16px;cursor:pointer;transition:transform .12s;}
   .friend-chip:active{transform:scale(0.98);}
-  .friend-ava{width:46px;height:46px;border-radius:50%;background:#F1ECFB;display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0;}
+  .friend-ava{width:46px;height:46px;border-radius:50%;background:var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden;flex-shrink:0;}
   .friend-ava img{width:100%;height:100%;object-fit:cover;}
   .friend-meta{flex:1;min-width:0;}
   .friend-name{font-size:16px;font-weight:800;color:var(--text);}
   .friend-sign{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .friend-arrow{color:var(--muted);font-size:18px;flex-shrink:0;}
-  .empty-friends{text-align:center;color:var(--muted);font-size:13px;padding:8px 18px 20px;line-height:1.6;}
+  .empty-friends{text-align:center;color:var(--muted);font-size:13px;padding:8px 0 6px;line-height:1.6;}
   .fd-head{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
   .fd-head .friend-ava{width:52px;height:52px;font-size:24px;}
   .fd-name{font-size:18px;font-weight:900;}
@@ -1181,7 +1177,7 @@ function isTaskDone(t){
 function renderStats(){
   const el=document.getElementById("st-list");
   const p=loadProfile();
-  el.innerHTML=meCardHTML(p)+`<div class="friends-title">好友 <button class="friends-refresh" id="friends-refresh" type="button">⟳ 刷新</button></div><div id="friends-wrap">${friendsHTML()}</div>`;
+  el.innerHTML=`<div class="people-card">`+meCardHTML(p)+`<div class="friends-head"><span class="fh-title">好友</span><button class="friends-refresh" id="me-conn-btn" type="button">连接</button></div><div id="friends-wrap">${friendsHTML()}</div></div>`;
   bindMeCard(p);
   el.insertAdjacentHTML("beforeend",statsCardsHTML());
   bindStatsCards();
@@ -1531,21 +1527,18 @@ function meCardHTML(p){
     <div class="me-top">
       <div class="me-avatar" id="me-avatar">${av}</div>
       <div class="me-info">
-        <input class="me-name-input" id="me-name" maxlength="12" placeholder="起个昵称" value="${esc(p.nickname)}">
+        <div class="me-name-row">
+          <input class="me-name-input" id="me-name" maxlength="12" placeholder="起个昵称" value="${esc(p.nickname)}">
+          <span class="self-badge">我</span>
+        </div>
         <input class="me-sign-input" id="me-sign" maxlength="40" placeholder="个性签名（可留空）" value="${esc(p.signature)}">
       </div>
     </div>
-    <div class="me-room">
-      <label>房间码</label>
-      <input id="me-room" maxlength="20" value="${esc(p.roomCode)}">
-      <button class="btn btn-soft" id="me-room-save" type="button">连接</button>
-    </div>
-    <div class="conn off" id="me-conn"><span class="dot"></span><span id="me-conn-text">未连接</span></div>
   </div>`;
 }
 function friendsHTML(){
   const fs=Object.values(friendsCache);
-  if(!fs.length) return `<div class="empty-friends">还没有好友～ 房间码默认是 admission，让朋友也用 admission 就能互看彼此的动态啦</div>`;
+  if(!fs.length) return `<div class="empty-friends">还没有好友～</div>`;
   fs.sort((a,b)=>(a.nickname||"").localeCompare(b.nickname||""));
   return `<div class="friend-grid">`+fs.map(f=>{
     const av=f.avatar?`<img src="${f.avatar}" alt="">`:`👤`;
@@ -1574,14 +1567,11 @@ function bindMeCard(p){
   const nameI=document.getElementById("me-name"), signI=document.getElementById("me-sign");
   if(nameI) nameI.addEventListener("input",()=>{ p.nickname=nameI.value; saveProfile(p); debouncePublish(); });
   if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
-  const roomSave=document.getElementById("me-room-save");
-  if(roomSave) roomSave.addEventListener("click",()=>{
-    const v=document.getElementById("me-room").value.trim();
-    if(v&&v!==p.roomCode){ p.roomCode=v; saveProfile(p); }
-    connectMQTT();
+  const connBtn=document.getElementById("me-conn-btn");
+  if(connBtn) connBtn.addEventListener("click",()=>{
+    if(mqttReady){ clearGhostFriends(); }
+    else { connectMQTT(); }
   });
-  const fr=document.getElementById("friends-refresh");
-  if(fr) fr.addEventListener("click",clearGhostFriends);
   bindFriendClicks();
 }
 function bindFriendClicks(){
@@ -1816,8 +1806,8 @@ function connectMQTT(){
   client.on("reconnect",()=>{ setConn("off","连接中…"); });
 }
 function setConn(cls,text){
-  const el=document.getElementById("me-conn"), t=document.getElementById("me-conn-text");
-  if(el){ el.className="conn "+cls; if(t)t.textContent=text; }
+  const b=document.getElementById("me-conn-btn");
+  if(b) b.textContent= cls==="on"?"刷新":"连接";
 }
 function openFriendDetail(uid){
   const f=friendsCache[uid]; if(!f)return;
