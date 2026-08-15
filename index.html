@@ -327,6 +327,8 @@
   .friend-name{font-size:16px;font-weight:800;color:var(--text);}
   .friend-sign{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .friend-arrow{color:var(--muted);font-size:18px;flex-shrink:0;}
+  .friend-remove{width:28px;height:28px;border:none;background:transparent;color:var(--muted);font-size:20px;line-height:1;border-radius:50%;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;}
+  .friend-remove:active{background:rgba(229,72,77,.12);color:#E5484D;}
   .empty-friends{text-align:center;color:var(--muted);font-size:13px;padding:8px 0 6px;line-height:1.6;}
   .fd-head{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
   .fd-head .friend-ava{width:52px;height:52px;font-size:24px;}
@@ -1543,6 +1545,7 @@ function friendsHTML(){
     return `<div class="friend-chip" data-uid="${esc(f.userId)}">
       <div class="friend-ava">${av}</div>
       <div class="friend-meta"><div class="friend-name">${esc(f.nickname||"好友")}</div>${f.signature?`<div class="friend-sign">${esc(f.signature)}</div>`:""}</div>
+      <button class="friend-remove" data-remove="${esc(f.userId)}" aria-label="移除该用户">×</button>
       <div class="friend-arrow">›</div>
     </div>`;
   }).join("")+`</div>`;
@@ -1568,7 +1571,26 @@ function bindMeCard(p){
   bindFriendClicks();
 }
 function bindFriendClicks(){
-  document.querySelectorAll(".friend-chip").forEach(ch=>ch.addEventListener("click",()=>openFriendDetail(ch.dataset.uid)));
+  document.querySelectorAll(".friend-chip").forEach(ch=>ch.addEventListener("click",e=>{
+    const rb=e.target.closest(".friend-remove");
+    if(rb){ e.stopPropagation(); removeFriend(rb.dataset.remove); return; }
+    openFriendDetail(ch.dataset.uid);
+  }));
+}
+function removeFriend(uid){
+  if(!uid) return;
+  if(!confirm("移除该用户？移除后该设备需重新打开软件才会再次出现。")) return;
+  /* 1) 清除 broker 上该 userId 的 retained 消息（发布空 retained） */
+  if(mqttClient&&mqttReady){
+    try{ mqttClient.publish("workbench/"+profile.roomCode+"/"+uid,"",{retain:true,qos:0}); }catch(e){}
+  }
+  /* 2) 从本地缓存删除 */
+  delete friendsCache[uid]; saveFriendsCache();
+  /* 3) 重绘列表 */
+  const w=document.getElementById("friends-wrap");
+  if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
+  /* 4) 若正在查看该用户弹窗，关闭 */
+  if(currentFriendUid===uid){ const m=document.getElementById("modal-friend"); if(m) m.classList.remove("open"); }
 }
 /* 刷新好友列表：重新发布自己 + 重新订阅房间 topic（broker 会重新投递所有好友的 retained 消息），并立即重绘当前缓存 */
 function refreshFriends(){
