@@ -267,6 +267,15 @@
   .st-legend{display:flex;justify-content:center;gap:18px;margin-top:16px;}
   .st-legend-item{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;}
   .st-legend-dot{width:10px;height:10px;border-radius:50%;}
+  .st-legend-col{flex-direction:column;align-items:stretch;gap:9px;justify-content:flex-start;}
+  .st-legend-col .st-legend-item{justify-content:flex-start;width:100%;}
+  .st-legend-col .st-legend-item .st-leg-val{margin-left:auto;}
+  .st-leg-name{display:inline-flex;align-items:center;gap:4px;font-weight:800;}
+  .st-leg-name i{color:var(--muted);font-style:normal;font-weight:600;font-size:11px;}
+  .st-leg-val{display:inline-flex;align-items:center;gap:4px;font-weight:800;}
+  .st-leg-val i{color:var(--muted);font-style:normal;font-weight:700;font-size:11px;}
+  .st-pie-empty{text-align:center;color:var(--muted);font-weight:800;padding:26px 0;font-size:13px;line-height:1.7;}
+  .st-pie-empty span{display:block;font-size:12px;font-weight:600;margin-top:6px;}
   .st-ci-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);}
   .st-ci-row:last-child{border-bottom:none;}
   .st-ci-name{font-weight:900;font-size:15px;}
@@ -1635,20 +1644,75 @@ function updateTrend(){
   const rg=document.getElementById("trend-range"); if(rg) rg.textContent=trendRangeText(trendOffset);
   const nx=document.getElementById("trend-next"); if(nx) nx.disabled=(trendOffset>=0);
 }
+function taskPieHTML(){
+  const tasks=state.tasks.filter(t=>(t.workMs||0)>0).sort((a,b)=>(b.workMs||0)-(a.workMs||0));
+  const total=tasks.reduce((s,t)=>s+(t.workMs||0),0);
+  const PALETTE=["#B79CED","#8FB8F0","#8FD9B6","#F5D77A","#F2A06A","#EFA0C2","#84D2CC","#EE9B9B"];
+  const colOf=i=>PALETTE[i%PALETTE.length];
+  const trunc=(s,n)=>{s=s||"";return s.length>n?s.slice(0,n)+"…":s;};
+  if(total<=0){
+    return `<div class="st-pie-empty">暂无计时数据<span>完成时间段任务并点击「结束」后，这里会显示各任务耗时占比</span></div>`;
+  }
+  const CX=160, CY=100, R=66, LR=R*0.62, INNER=0.12;
+  if(tasks.length===1){
+    const t=tasks[0], col=colOf(0);
+    return `<div class="st-pie-wrap"><svg viewBox="0 0 320 200" width="100%" style="max-width:360px;display:block;margin:0 auto;">`
+      +`<circle cx="${CX}" cy="${CY}" r="${R}" fill="${col}" stroke="#fff" stroke-width="2"/>`
+      +`<text x="${CX}" y="${CY-3}" text-anchor="middle" font-size="11" font-weight="800" fill="#4A4063">${esc(trunc(t.name,5))}</text>`
+      +`<text x="${CX}" y="${CY+11}" text-anchor="middle" font-size="10" font-weight="700" fill="#6B6280">${fmtDur(t.workMs||0)}</text></svg></div>`;
+  }
+  let a0=-Math.PI/2, paths="";
+  const small=[];
+  tasks.forEach((t,i)=>{
+    const val=t.workMs||0, frac=val/total;
+    const a1=a0+frac*Math.PI*2;
+    const large=(a1-a0)>Math.PI?1:0;
+    const x0=CX+R*Math.cos(a0), y0=CY+R*Math.sin(a0);
+    const x1=CX+R*Math.cos(a1), y1=CY+R*Math.sin(a1);
+    const col=colOf(i);
+    paths+=`<path d="M${CX} ${CY} L${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${col}" stroke="#fff" stroke-width="2"/>`;
+    const am=(a0+a1)/2;
+    if(frac>=INNER){
+      const lx=CX+LR*Math.cos(am), ly=CY+LR*Math.sin(am);
+      paths+=`<text x="${lx.toFixed(1)}" y="${(ly-2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="800" fill="#4A4063">${esc(trunc(t.name,4))}</text>`;
+      paths+=`<text x="${lx.toFixed(1)}" y="${(ly+10).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#6B6280">${fmtDur(val)}</text>`;
+    } else {
+      small.push({am, name:t.name, val, col});
+    }
+    a0=a1;
+  });
+  const place=(arr, dir)=>{
+    arr.sort((p,q)=>Math.sin(p.am)-Math.sin(q.am));
+    let prevY=null;
+    arr.forEach(p=>{
+      const c=Math.cos(p.am), s=Math.sin(p.am);
+      let p2y=CY+(R+14)*s;
+      if(prevY!==null && p2y < prevY+16) p2y=prevY+16;
+      prevY=p2y;
+      const p0x=CX+R*c, p0y=CY+R*s;
+      const p1x=CX+(R+14)*c, p1y=CY+(R+14)*s;
+      const p2x=p1x+dir*16;
+      paths+=`<polyline points="${p0x.toFixed(1)},${p0y.toFixed(1)} ${p1x.toFixed(1)},${p1y.toFixed(1)} ${p2x.toFixed(1)},${p2y.toFixed(1)}" fill="none" stroke="${p.col}" stroke-width="1.4" opacity="0.9"/>`;
+      const tx=p2x+dir*4;
+      paths+=`<text x="${tx.toFixed(1)}" y="${(p2y+3).toFixed(1)}" text-anchor="${dir>0?'start':'end'}" font-size="9.5" font-weight="700" fill="#5A5270">${esc(trunc(p.name,5))} ${fmtDur(p.val)}</text>`;
+    });
+  };
+  place(small.filter(p=>Math.cos(p.am)>=0), 1);
+  place(small.filter(p=>Math.cos(p.am)<0), -1);
+  return `<div class="st-pie-wrap"><svg viewBox="0 0 320 200" width="100%" style="max-width:360px;display:block;margin:0 auto;">${paths}</svg></div>`;
+}
 function statsCardsHTML(){
   const today=dateKey(new Date());
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,today));
   const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
   const pendingTasks=dayTasks.length-doneTasks;
   const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
+  const pieTasks=state.tasks.filter(t=>(t.workMs||0)>0);
+  const pieTotal=pieTasks.reduce((s,t)=>s+(t.workMs||0),0);
   return `    <div class="st-card">
-      <div class="st-title">任务完成情况</div>
-      <div class="st-sub">已完成 ${doneTasks} / 共 ${dayTasks.length}</div>
-      <div class="st-pie-wrap"><div class="st-pie">
-        <svg viewBox="0 0 160 160"><defs><linearGradient id="pieGrad" x1="18%" y1="0%" x2="82%" y2="100%"><stop offset="0%" stop-color="#8E5BE6"/><stop offset="55%" stop-color="#A878F0"/><stop offset="100%" stop-color="#CDA6FB"/></linearGradient><filter id="pieGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#9B72EF" flood-opacity="0.40"/></filter></defs><circle cx="80" cy="80" r="60" fill="none" stroke="#EFE9FA" stroke-width="18"/><circle cx="80" cy="80" r="60" fill="none" stroke="url(#pieGrad)" stroke-width="18" stroke-linejoin="round" stroke-dasharray="${(377*pct/100).toFixed(1)} 377" stroke-linecap="${pct===0?'butt':'round'}" filter="url(#pieGlow)"/></svg>
-        <div class="st-pie-center"><big>${pct}%</big><small>完成率</small></div>
-      </div></div>
-      <div class="st-legend"><div class="st-legend-item"><div class="st-legend-dot" style="background:#9B72EF"></div><span>已完成 ${doneTasks}</span></div><div class="st-legend-item"><div class="st-legend-dot" style="background:#EDE6FF"></div><span>未完成 ${pendingTasks}</span></div></div>
+      <div class="st-title">任务时间分布</div>
+      <div class="st-sub">累计 ${fmtDur(pieTotal)} · 共 ${pieTasks.length} 个任务</div>
+      ${taskPieHTML()}
       <div class="st-trend">
         <div class="st-trend-head">
           <button class="trend-nav" id="trend-prev" type="button" aria-label="更早一周">‹</button>
