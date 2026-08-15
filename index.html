@@ -1839,9 +1839,12 @@ function renderFriendTimeline(container,items){
       if(!isPoint && it.startedAt && it.endedAt) return `<div class="tl-axis${cls}"><div class="tl-rail"></div><div class="tl-t done top">${it.startedAt}</div><div class="tl-dot top"></div><div class="tl-t done bottom">${it.endedAt}</div><div class="tl-dot bottom"></div></div>`;
       return `<div class="tl-axis${cls}"><div class="tl-rail"></div><div class="tl-t done mid">${hhmm(it.completedAt)}</div><div class="tl-dot mid"></div></div>`;
     }
-    if(!isPoint && it.planStart && it.planEnd) return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan top">${it.planStart}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${it.planEnd}</div><div class="tl-dot light bottom"></div></div>`;
-    const s=it.planStart||"--";
-    return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan mid">${s}</div><div class="tl-dot light mid"></div></div>`;
+    if(!isPoint){
+      const started=(it.phase==="started"||it.phase==="paused")&&it.startedAt;
+      if(it.planStart && it.planEnd) return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan top">${started?it.startedAt:it.planStart}</div><div class="tl-dot light top"></div><div class="tl-t plan bottom">${it.planEnd}</div><div class="tl-dot light bottom"></div></div>`;
+      const s=started?it.startedAt:(it.planStart||"--");
+      return `<div class="tl-axis${cls}"><div class="tl-rail light"></div><div class="tl-t plan mid">${s}</div><div class="tl-dot light mid"></div></div>`;
+    }
   };
   const make=(it,bridge)=>{
     const div=document.createElement("div"); div.className="tl-item";
