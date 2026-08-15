@@ -1656,16 +1656,18 @@ function taskPieHTML(){
   if(total<=0){
     return `<div class="st-pie-empty">暂无计时数据<span>完成时间段任务并点击「结束」后，这里会显示各任务耗时占比</span></div>`;
   }
-  const CX=160, CY=100, R=66, LR=R*0.62, INNER=0.12;
+  const CX=160, CY=100, R=66, NAME_R=R*0.55;
+  const LEAD_IN=R+10, LEAD_OUT=R+26;
   if(tasks.length===1){
     const t=tasks[0], col=colOf(0);
     return `<div class="st-pie-wrap"><svg viewBox="0 0 320 200" width="100%" style="max-width:360px;display:block;margin:0 auto;">`
       +`<circle cx="${CX}" cy="${CY}" r="${R}" fill="${col}" stroke="#fff" stroke-width="2"/>`
-      +`<text x="${CX}" y="${CY-3}" text-anchor="middle" font-size="11" font-weight="800" fill="#4A4063">${esc(trunc(t.name,5))}</text>`
-      +`<text x="${CX}" y="${CY+11}" text-anchor="middle" font-size="10" font-weight="700" fill="#6B6280">${fmtDur(t.workMs||0)}</text></svg></div>`;
+      +`<text x="${CX}" y="${CY-3}" text-anchor="middle" font-size="12" font-weight="800" fill="#4A4063">${esc(trunc(t.name,6))}</text>`
+      +`<line x1="${CX+R}" y1="${CY}" x2="${CX+LEAD_OUT}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>`
+      +`<text x="${CX+LEAD_OUT+3}" y="${CY+3}" text-anchor="start" font-size="11" font-weight="700" fill="#5A5270">${fmtDur(t.workMs||0)}</text></svg></div>`;
   }
-  let a0=-Math.PI/2, paths="";
-  const small=[];
+  let a0=-Math.PI/2, paths="", innerText="", leaderLines="", leaderText="";
+  const leaders=[];
   tasks.forEach((t,i)=>{
     const val=t.workMs||0, frac=val/total;
     const a1=a0+frac*Math.PI*2;
@@ -1675,13 +1677,9 @@ function taskPieHTML(){
     const col=colOf(i);
     paths+=`<path d="M${CX} ${CY} L${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${col}" stroke="#fff" stroke-width="2"/>`;
     const am=(a0+a1)/2;
-    if(frac>=INNER){
-      const lx=CX+LR*Math.cos(am), ly=CY+LR*Math.sin(am);
-      paths+=`<text x="${lx.toFixed(1)}" y="${(ly-2).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="800" fill="#4A4063">${esc(trunc(t.name,4))}</text>`;
-      paths+=`<text x="${lx.toFixed(1)}" y="${(ly+10).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#6B6280">${fmtDur(val)}</text>`;
-    } else {
-      small.push({am, name:t.name, val, col});
-    }
+    const lx=CX+NAME_R*Math.cos(am), ly=CY+NAME_R*Math.sin(am);
+    innerText+=`<text x="${lx.toFixed(1)}" y="${(ly+3).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="800" fill="#4A4063">${esc(trunc(t.name,4))}</text>`;
+    leaders.push({am, val, col});
     a0=a1;
   });
   const place=(arr, dir)=>{
@@ -1689,20 +1687,20 @@ function taskPieHTML(){
     let prevY=null;
     arr.forEach(p=>{
       const c=Math.cos(p.am), s=Math.sin(p.am);
-      let p2y=CY+(R+14)*s;
-      if(prevY!==null && p2y < prevY+16) p2y=prevY+16;
-      prevY=p2y;
+      let ty=CY+LEAD_IN*s;
+      if(prevY!==null && ty < prevY+16) ty=prevY+16;
+      prevY=ty;
       const p0x=CX+R*c, p0y=CY+R*s;
-      const p1x=CX+(R+14)*c, p1y=CY+(R+14)*s;
-      const p2x=p1x+dir*16;
-      paths+=`<polyline points="${p0x.toFixed(1)},${p0y.toFixed(1)} ${p1x.toFixed(1)},${p1y.toFixed(1)} ${p2x.toFixed(1)},${p2y.toFixed(1)}" fill="none" stroke="${p.col}" stroke-width="1.4" opacity="0.9"/>`;
-      const tx=p2x+dir*4;
-      paths+=`<text x="${tx.toFixed(1)}" y="${(p2y+3).toFixed(1)}" text-anchor="${dir>0?'start':'end'}" font-size="9.5" font-weight="700" fill="#5A5270">${esc(trunc(p.name,5))} ${fmtDur(p.val)}</text>`;
+      const p1x=CX+LEAD_IN*c, p1y=CY+LEAD_IN*s;
+      const p2x=CX+LEAD_OUT*c;
+      leaderLines+=`<polyline points="${p0x.toFixed(1)},${p0y.toFixed(1)} ${p1x.toFixed(1)},${p1y.toFixed(1)} ${p2x.toFixed(1)},${ty.toFixed(1)}" fill="none" stroke="${p.col}" stroke-width="1.4" opacity="0.9"/>`;
+      const tx=p2x+dir*3;
+      leaderText+=`<text x="${tx.toFixed(1)}" y="${(ty+3).toFixed(1)}" text-anchor="${dir>0?'start':'end'}" font-size="10.5" font-weight="700" fill="#5A5270">${fmtDur(p.val)}</text>`;
     });
   };
-  place(small.filter(p=>Math.cos(p.am)>=0), 1);
-  place(small.filter(p=>Math.cos(p.am)<0), -1);
-  return `<div class="st-pie-wrap"><svg viewBox="0 0 320 200" width="100%" style="max-width:360px;display:block;margin:0 auto;">${paths}</svg></div>`;
+  place(leaders.filter(p=>Math.cos(p.am)>=0), 1);
+  place(leaders.filter(p=>Math.cos(p.am)<0), -1);
+  return `<div class="st-pie-wrap"><svg viewBox="0 0 320 200" width="100%" style="max-width:360px;display:block;margin:0 auto;">${paths}${innerText}${leaderLines}${leaderText}</svg></div>`;
 }
 function statsCardsHTML(){
   const today=dateKey(new Date());
