@@ -1569,7 +1569,7 @@ function bindMeCard(p){
   if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
   const connBtn=document.getElementById("me-conn-btn");
   if(connBtn) connBtn.addEventListener("click",()=>{
-    if(mqttReady){ clearGhostFriends(); }
+    if(mqttReady){ refreshFriends(); }
     else { connectMQTT(); }
   });
   bindFriendClicks();
@@ -1577,18 +1577,14 @@ function bindMeCard(p){
 function bindFriendClicks(){
   document.querySelectorAll(".friend-chip").forEach(ch=>ch.addEventListener("click",()=>openFriendDetail(ch.dataset.uid)));
 }
-/* 清除旧设备/无痕窗口留下的「幽灵好友」：往每个非自己的 userId 发空 retained 消息清掉 broker 残留，并清空本地缓存 */
-function clearGhostFriends(){
-  const myId=profile.userId, room=profile.roomCode;
-  if(mqttClient&&mqttReady){
-    for(const id in friendsCache){
-      if(id===myId)continue;
-      try{ mqttClient.publish("workbench/"+room+"/"+id,"",{retain:true,qos:1}); }catch(e){}
-    }
-  }
-  friendsCache={}; saveFriendsCache();
-  const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
+/* 刷新好友列表：重新发布自己 + 重新订阅房间 topic（broker 会重新投递所有好友的 retained 消息），并立即重绘当前缓存 */
+function refreshFriends(){
   publishMyState();
+  if(mqttClient&&mqttReady){
+    try{ mqttClient.subscribe("workbench/"+profile.roomCode+"/+",{qos:1},()=>{}); }catch(e){}
+  }
+  const w=document.getElementById("friends-wrap");
+  if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
 }
 /* 近一周每日完成任务总时长折线图（可左右翻看前后周）；口径与日历页「已完成任务合计」一致：已完成的时间段任务 workMs 之和 */
 let trendOffset=0; /* 0=含今天的最近一周；负数=更早的周；next 按钮在 >=0 时禁用（不显示未来） */
@@ -1779,13 +1775,22 @@ function debouncePublish(){ if(publishTimer)clearTimeout(publishTimer); publishT
 function maybeAutoPublish(){ if(mqttReady) publishMyState(); }
 
 function connectMQTT(){
-  if(typeof mqtt==="undefined"){ setConn("off","未连接（无法加载同步库）"); return; }
+  const btn=document.getElementById("me-conn-btn");
+  if(btn) btn.textContent="连接中…";
+  if(typeof mqtt==="undefined"){
+    alert("同步库未能加载（多为网络受限）。请检查网络，或在手机端通过 GitHub Pages 链接打开使用。");
+    if(btn) btn.textContent="连接";
+    return;
+  }
   try{ if(mqttClient){ mqttClient.end(true); } }catch(e){}
-  setConn("off","连接中…");
   let client;
   try{
     client=mqtt.connect(MQTT_URL,{clientId:"wb_"+uid(),clean:true,reconnectPeriod:3000,connectTimeout:8000});
-  }catch(e){ setConn("off","连接失败"); return; }
+  }catch(e){
+    alert("连接失败："+(e&&e.message||e));
+    if(btn) btn.textContent="连接";
+    return;
+  }
   mqttClient=client;
   client.on("connect",()=>{
     mqttReady=true; setConn("on","已连接 · 实时同步");
@@ -1801,9 +1806,9 @@ function connectMQTT(){
       if(route==="stats"){ const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); } }
     }catch(e){}
   });
-  client.on("error",()=>{ mqttReady=false; setConn("off","连接失败"); });
-  client.on("close",()=>{ mqttReady=false; setConn("off","已断开，重试中"); });
-  client.on("reconnect",()=>{ setConn("off","连接中…"); });
+  client.on("error",()=>{ mqttReady=false; if(btn) btn.textContent="连接"; });
+  client.on("close",()=>{ mqttReady=false; if(btn) btn.textContent="连接"; });
+  client.on("reconnect",()=>{ if(btn) btn.textContent="连接中…"; });
 }
 function setConn(cls,text){
   const b=document.getElementById("me-conn-btn");
