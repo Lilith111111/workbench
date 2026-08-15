@@ -311,7 +311,13 @@
   .me-sign-input:focus{outline:none;}
   .friends-head{display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px;}
   .friends-head .fh-title{font-size:15px;font-weight:900;color:var(--text);}
-  .friends-refresh{font-size:12px;font-weight:800;color:var(--primary-dark);background:none;border:none;padding:4px 8px;cursor:pointer;flex-shrink:0;}
+  .conn-state{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:var(--muted);flex-shrink:0;}
+  .conn-state .dot{width:7px;height:7px;border-radius:50%;background:#CBD5E1;flex-shrink:0;}
+  .conn-state.busy{color:#B07A1E;}
+  .conn-state.busy .dot{background:#F5B544;}
+  .conn-state.on{color:#2FA37A;}
+  .conn-state.on .dot{background:#34D399;}
+  .conn-state.off .dot{background:#F87171;}
   .friend-grid{display:flex;flex-direction:column;gap:10px;}
   .friend-chip{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:18px;box-shadow:var(--shadow-soft);padding:12px 16px;cursor:pointer;transition:transform .12s;}
   .friend-chip:active{transform:scale(0.98);}
@@ -914,14 +920,6 @@ function renderCalendar(){
   const safeAppend=(parent,it)=>{ try{ parent.appendChild(it.kind==="checkin"?makeRoutineItem(it):makeTaskCard(it)); }catch(e){ console.error("render item failed",e); } };
   doneItems.forEach(it=>safeAppend(body,it));
 
-  // 已完成任务总计时（仅统计有进行时长的时间段任务）
-  const donePeriodTasks=state.tasks.filter(t=>taskOnDay(t,k)&&isTaskDone(t)&&t.type==="period"&&(t.workMs||0)>0);
-  if(doneItems.length&&donePeriodTasks.length){
-    const totalMs=donePeriodTasks.reduce((s,t)=>s+(t.workMs||0),0);
-    const sum=document.createElement("div"); sum.className="tl-summary";
-    sum.innerHTML=`已完成任务合计 · 进行 <b>${fmtDur(totalMs)}</b>`;
-    body.appendChild(sum);
-  }
 
   if(pendingItems.length){
     const div=document.createElement("div");div.className="tl-divider";div.textContent="未完成";body.appendChild(div);
@@ -1177,7 +1175,7 @@ function isTaskDone(t){
 function renderStats(){
   const el=document.getElementById("st-list");
   const p=loadProfile();
-  el.innerHTML=`<div class="people-card">`+meCardHTML(p)+`<div class="friends-head"><span class="fh-title">好友</span><button class="friends-refresh" id="me-conn-btn" type="button">连接</button></div><div id="friends-wrap">${friendsHTML()}</div></div>`;
+  el.innerHTML=`<div class="people-card">`+meCardHTML(p)+`<div class="friends-head"><span class="fh-title">好友</span><span class="conn-state off" id="me-conn-state"><span class="dot"></span><span id="me-conn-text">未连接</span></span></div><div id="friends-wrap">${friendsHTML()}</div></div>`;
   bindMeCard(p);
   el.insertAdjacentHTML("beforeend",statsCardsHTML());
   bindStatsCards();
@@ -1567,11 +1565,6 @@ function bindMeCard(p){
   const nameI=document.getElementById("me-name"), signI=document.getElementById("me-sign");
   if(nameI) nameI.addEventListener("input",()=>{ p.nickname=nameI.value; saveProfile(p); debouncePublish(); });
   if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
-  const connBtn=document.getElementById("me-conn-btn");
-  if(connBtn) connBtn.addEventListener("click",()=>{
-    if(mqttReady){ refreshFriends(); }
-    else { connectMQTT(); }
-  });
   bindFriendClicks();
 }
 function bindFriendClicks(){
@@ -1585,6 +1578,14 @@ function refreshFriends(){
   }
   const w=document.getElementById("friends-wrap");
   if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
+  refreshOpenFriend();
+}
+/* 若好友动态弹窗正打开且数据已更新，自动重新渲染（实时同步任务时长/时间轴/开始时间） */
+let currentFriendUid=null;
+function refreshOpenFriend(){
+  const m=document.getElementById("modal-friend");
+  if(!m||!m.classList.contains("open")||!currentFriendUid) return;
+  openFriendDetail(currentFriendUid);
 }
 /* 近一周每日完成任务总时长折线图（可左右翻看前后周）；口径与日历页「已完成任务合计」一致：已完成的时间段任务 workMs 之和 */
 let trendOffset=0; /* 0=含今天的最近一周；负数=更早的周；next 按钮在 >=0 时禁用（不显示未来） */
@@ -1634,7 +1635,7 @@ function updateTrend(){
 }
 function taskPieHTML(){
   const tk=todayKey();
-  const tasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===tk).sort((a,b)=>(b.workMs||0)-(a.workMs||0));
+  const tasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===tk && t.phase!=="started").sort((a,b)=>(b.workMs||0)-(a.workMs||0));
   const total=tasks.reduce((s,t)=>s+(t.workMs||0),0);
   const PALETTE=["#B79CED","#8FB8F0","#8FD9B6","#F5D77A","#F2A06A","#EFA0C2","#84D2CC","#EE9B9B"];
   const colOf=i=>PALETTE[i%PALETTE.length];
@@ -1694,11 +1695,11 @@ function statsCardsHTML(){
   const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
   const pendingTasks=dayTasks.length-doneTasks;
   const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
-  const pieTasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===today);
+  const pieTasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===today && t.phase!=="started");
   const pieTotal=pieTasks.reduce((s,t)=>s+(t.workMs||0),0);
   return `    <div class="st-card">
-      <div class="st-title">任务时间分布</div>
-      <div class="st-sub">今日累计 ${fmtDur(pieTotal)} · 共 ${pieTasks.length} 个任务</div>
+      <div class="st-title">任务明细</div>
+      <div class="st-sub" style="text-align:center;">今日累计 ${fmtDur(pieTotal)}</div>
       ${taskPieHTML()}
       <div class="st-trend">
         <div class="st-trend-head">
@@ -1706,7 +1707,6 @@ function statsCardsHTML(){
           <div class="st-trend-title">近一周完成时长</div>
           <button class="trend-nav" id="trend-next" type="button" aria-label="更晚一周"${trendOffset>=0?' disabled':''}>›</button>
         </div>
-        <div class="st-trend-range" id="trend-range">${trendRangeText(trendOffset)}</div>
         <div id="trend-svg">${trendHTML(trendOffset)}</div>
       </div>
     </div>
@@ -1775,25 +1775,16 @@ function debouncePublish(){ if(publishTimer)clearTimeout(publishTimer); publishT
 function maybeAutoPublish(){ if(mqttReady) publishMyState(); }
 
 function connectMQTT(){
-  const btn=document.getElementById("me-conn-btn");
-  if(btn) btn.textContent="连接中…";
-  if(typeof mqtt==="undefined"){
-    alert("同步库未能加载（多为网络受限）。请检查网络，或在手机端通过 GitHub Pages 链接打开使用。");
-    if(btn) btn.textContent="连接";
-    return;
-  }
+  setConn("busy","连接中…");
+  if(typeof mqtt==="undefined"){ setConn("off","未连接"); return; }
   try{ if(mqttClient){ mqttClient.end(true); } }catch(e){}
   let client;
   try{
     client=mqtt.connect(MQTT_URL,{clientId:"wb_"+uid(),clean:true,reconnectPeriod:3000,connectTimeout:8000});
-  }catch(e){
-    alert("连接失败："+(e&&e.message||e));
-    if(btn) btn.textContent="连接";
-    return;
-  }
+  }catch(e){ setConn("off","未连接"); return; }
   mqttClient=client;
   client.on("connect",()=>{
-    mqttReady=true; setConn("on","已连接 · 实时同步");
+    mqttReady=true; setConn("on","已连接");
     const topic="workbench/"+profile.roomCode+"/+";
     try{ client.subscribe(topic,{qos:1},()=>{}); }catch(e){}
     publishMyState();
@@ -1804,18 +1795,21 @@ function connectMQTT(){
       if(!d||!d.userId||d.userId===profile.userId)return;
       friendsCache[d.userId]=d; saveFriendsCache();
       if(route==="stats"){ const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); } }
+      refreshOpenFriend();
     }catch(e){}
   });
-  client.on("error",()=>{ mqttReady=false; if(btn) btn.textContent="连接"; });
-  client.on("close",()=>{ mqttReady=false; if(btn) btn.textContent="连接"; });
-  client.on("reconnect",()=>{ if(btn) btn.textContent="连接中…"; });
+  client.on("error",()=>{ mqttReady=false; setConn("off","未连接"); });
+  client.on("close",()=>{ mqttReady=false; setConn("off","未连接"); });
+  client.on("reconnect",()=>{ setConn("busy","连接中…"); });
 }
 function setConn(cls,text){
-  const b=document.getElementById("me-conn-btn");
-  if(b) b.textContent= cls==="on"?"刷新":"连接";
+  const el=document.getElementById("me-conn-state"), t=document.getElementById("me-conn-text");
+  if(el) el.className="conn-state "+cls;
+  if(t) t.textContent=text;
 }
 function openFriendDetail(uid){
   const f=friendsCache[uid]; if(!f)return;
+  currentFriendUid=uid;
   const av=f.avatar?`<img src="${f.avatar}" alt="">`:`👤`;
   const fdItems=f.timeline||[];
   const fdTotal=fdItems.filter(it=>it.kind==="task"&&it.type==="period"&&it.phase==="done"&&(it.workMs||0)>0).reduce((s,it)=>s+(it.workMs||0),0);
@@ -1868,14 +1862,6 @@ function renderFriendTimeline(container,items){
     return div;
   };
   doneItems.forEach((it,i)=>container.appendChild(make(it, i<doneItems.length-1)));
-  // 对方已完成任务总计时
-  const fdDoneTasks=doneItems.filter(it=>it.kind==="task"&&it.type==="period"&&it.phase==="done"&&(it.workMs||0)>0);
-  if(doneItems.length&&fdDoneTasks.length){
-    const totalMs=fdDoneTasks.reduce((s,it)=>s+(it.workMs||0),0);
-    const sum=document.createElement("div"); sum.className="tl-summary";
-    sum.innerHTML=`已完成任务合计 · 进行 <b>${fmtDur(totalMs)}</b>`;
-    container.appendChild(sum);
-  }
   if(pendingItems.length){
     const d=document.createElement("div"); d.className="tl-divider"; d.textContent="未完成"; container.appendChild(d);
     pendingItems.forEach((it,i)=>container.appendChild(make(it, i<pendingItems.length-1)));
@@ -1931,6 +1917,9 @@ setInterval(()=>{
 },1000);
 
 function initFriends(){ connectMQTT(); }
+
+/* 自动刷新好友列表：每 30 秒重新订阅并拉取，无需手动点击 */
+setInterval(refreshFriends, 30000);
 
 /* 时间输入框的「✕」清除按钮：一键取消已设的开始/结束时间 */
 document.querySelectorAll(".time-clear").forEach(b=>b.addEventListener("click",()=>{ const el=document.getElementById(b.dataset.clear); if(el)el.value=""; }));
