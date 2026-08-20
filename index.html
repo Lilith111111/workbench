@@ -1053,6 +1053,7 @@ function makeTaskCard(it){
         `<div class="tl-action-slot">${taskActionHTML(t)}</div>`+
       `</div>`+
       `<div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(t)}</span><span class="tl-meta-l2">${taskMetaRight(t)}</span></div>`+
+      (t.desc?`<div class="tl-note">${esc(t.desc)}</div>`:"")+
     `</div>`;
   const card=div.querySelector(".tl-card");
   applyCardColor(card,t.color);
@@ -1859,7 +1860,7 @@ function renderFriendTimeline(container,items){
       const metaR=wHint?`<span class="tl-meta-l2">${wHint}</span>`:(it.done?`<span class="tl-meta-l2">打卡 ${it.time||""}</span>`:`<span class="tl-meta-l2">尚未打卡</span>`);
       cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-text"><div class="tl-title">${titleHTML}</div></div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${leftTxt}</span>${metaR}</div>${noteBelow}</div>`;
     }else{
-      cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskMetaRight(it)}</span></div></div>`;
+      cardHTML=`<div class="tl-card ${it.done?"done":""}"><div class="tl-body"><div class="tl-name">${esc(it.name)}</div><div class="tl-check ${it.done?"checked":""}"></div></div><div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(it)}</span><span class="tl-meta-l2">${taskMetaRight(it)}</span></div>`+(it.desc?`<div class="tl-note">${esc(it.desc)}</div>`:"")+`</div>`;
     }
     div.innerHTML=axis+cardHTML;
     const card=div.querySelector(".tl-card"); if(card)applyCardColor(card,it.color);
