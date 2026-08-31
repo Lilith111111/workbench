@@ -1519,8 +1519,6 @@ function loadProfile(){
   try{ const raw=localStorage.getItem(PROFILE_KEY); if(raw){const q=JSON.parse(raw); if(q&&q.userId){ p=q; } } }catch(e){}
   if(!p){ p={userId:uid(), roomCode:"admission", nickname:"", signature:"", avatar:""}; }
   try{ if(!localStorage.getItem("wb_mig_room_v1")){ p.roomCode="admission"; localStorage.setItem("wb_mig_room_v1","1"); } }catch(e){}
-  const d=deriveUserId(p);
-  if(d!==p.userId){ p.userId=d; }
   try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); }catch(e){}
   return p;
 }
@@ -1579,19 +1577,31 @@ function meCardHTML(p){
     </div>
   </div>`;
 }
-/* 好友列表去重：内容（昵称+签名+头像）完全相同的多条视为同一人残留，只保留一条（取时间轴更完整/更新更近的）。空壳（无昵称签名头像）不参与去重，避免误合并不同无名氏 */
+/* 好友列表过滤与合并：
+   规则1 不显示自己（由 isSelfEcho 在收消息时拦截，此处不重复）；
+   规则2 默认(空)昵称的好友不显示；
+   规则3 同昵称的多条合并为一条，头像/签名取「已设置」的那一方（非空即覆盖），时间轴取更丰富的那条 */
 function dedupFriends(list){
   const seen={}, out=[];
-  const score=f=>(f.timeline?f.timeline.length:0)*100000+(f.updatedAt||0);
   for(const f of list){
-    const hasId=!!(f.nickname||f.signature||f.avatar);
-    if(!hasId){ out.push(f); continue; }
-    const key=(f.nickname||"")+"\u0000"+(f.signature||"")+"\u0000"+(f.avatar||"");
-    if(seen[key]){
-      if(score(f)>score(seen[key])){ const i=out.indexOf(seen[key]); out[i]=f; seen[key]=f; }
-      continue;
+    const name=(f.nickname||"").trim().toLowerCase();
+    if(!name) continue; // 规则2：默认(空)昵称不显示
+    if(seen[name]){
+      const a=seen[name];                 // a 为已存入的克隆对象
+      const b=Object.assign({},f);        // 克隆，避免污染缓存
+      const aLen=a.timeline?a.timeline.length:0, bLen=b.timeline?b.timeline.length:0;
+      const prim = aLen>=bLen ? a : b;    // 时间轴更丰富者作为主记录
+      const other = prim===a ? b : a;
+      // 头像/签名取已设置的（非空），保证合并后显示的是两账号中已填好的
+      prim.avatar = prim.avatar || other.avatar || "";
+      prim.signature = prim.signature || other.signature || "";
+      prim.nickname = prim.nickname || other.nickname || "";
+      seen[name]=prim;
+      const i=out.indexOf(a); if(i>=0) out[i]=prim;
+    } else {
+      const c=Object.assign({},f);        // 克隆，避免污染缓存
+      seen[name]=c; out.push(c);
     }
-    seen[key]=f; out.push(f);
   }
   return out;
 }
@@ -1626,7 +1636,7 @@ function bindMeCard(p){
   const nameI=document.getElementById("me-name"), signI=document.getElementById("me-sign");
   if(nameI){
     nameI.addEventListener("input",()=>{ p.nickname=nameI.value; saveProfile(p); debouncePublish(); });
-    nameI.addEventListener("blur",()=>{ const d=deriveUserId(p); if(d!==p.userId){ const oldTopic="workbench/"+profile.roomCode+"/"+p.userId; try{ if(mqttClient) mqttClient.publish(oldTopic,"",{retain:true,qos:1}); }catch(e){} p.userId=d; saveProfile(p); try{ if(mqttClient) mqttClient.end(true); }catch(e){} connectMQTT(); } });
+    nameI.addEventListener("blur",()=>{ saveProfile(p); debouncePublish(); });
   }
   if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
   bindFriendClicks();
@@ -1893,7 +1903,20 @@ function setConn(cls,text){
   if(t) t.textContent=text;
 }
 function openFriendDetail(uid){
-  const f=friendsCache[uid]; if(!f)return;
+  const base=friendsCache[uid]; if(!base)return;
+  /* 同昵称合并：头像/签名取已设置的，时间轴取更丰富的，与好友列表显示保持一致 */
+  const nm=(base.nickname||"").trim().toLowerCase();
+  const f=Object.assign({},base);
+  if(nm){
+    for(const k of Object.keys(friendsCache)){
+      const o=friendsCache[k]; if(!o) continue;
+      if((o.nickname||"").trim().toLowerCase()!==nm) continue;
+      if(o.avatar) f.avatar=o.avatar;
+      if(o.signature) f.signature=o.signature;
+      const ol=o.timeline?o.timeline.length:0, fl=f.timeline?f.timeline.length:0;
+      if(ol>fl) f.timeline=o.timeline;
+    }
+  }
   currentFriendUid=uid;
   const av=f.avatar?`<img src="${f.avatar}" alt="">`:`👤`;
   const fdItems=f.timeline||[];
