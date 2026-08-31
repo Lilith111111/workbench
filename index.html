@@ -480,6 +480,7 @@ const todayKey=()=>dateKey(new Date());
 const parseKey=k=>{try{const[y,m,d]=String(k).split("-").map(Number);if([y,m,d].some(isNaN))return new Date();return new Date(y,m-1,d);}catch(e){return new Date();}};
 const taskOnDay=(t,k)=>(t.date<=k&&k<=(t.endDate||t.date));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function strHash(s){ let h=5381; s=String(s||""); for(let i=0;i<s.length;i++){ h=(((h<<5)+h)+s.charCodeAt(i))>>>0; } return h.toString(16); }
 const val=id=>{const e=document.getElementById(id);return e?e.value:""};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
@@ -1504,15 +1505,21 @@ const PROFILE_KEY="wb_profile_v1";
 const FRIENDS_KEY="wb_friends_cache_v1";
 let profile=loadProfile();
 let friendsCache=loadFriendsCache();
+let friendSeen={};
 let mqttClient=null, mqttReady=false;
 let publishTimer=null;
 
+function deriveUserId(p){
+  const n=(p.nickname||"").trim().toLowerCase();
+  return n? ("u"+strHash(n)) : p.userId;
+}
 function loadProfile(){
-  try{ const raw=localStorage.getItem(PROFILE_KEY); if(raw){const p=JSON.parse(raw); if(p&&p.userId){
-    try{ if(!localStorage.getItem("wb_mig_room_v1")){ p.roomCode="admission"; localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); localStorage.setItem("wb_mig_room_v1","1"); } }catch(e){}
-    return p;
-  }} }catch(e){}
-  const p={userId:uid(), roomCode:"admission", nickname:"", signature:"", avatar:""};
+  let p=null;
+  try{ const raw=localStorage.getItem(PROFILE_KEY); if(raw){const q=JSON.parse(raw); if(q&&q.userId){ p=q; } } }catch(e){}
+  if(!p){ p={userId:uid(), roomCode:"admission", nickname:"", signature:"", avatar:""}; }
+  try{ if(!localStorage.getItem("wb_mig_room_v1")){ p.roomCode="admission"; localStorage.setItem("wb_mig_room_v1","1"); } }catch(e){}
+  const d=deriveUserId(p);
+  if(d!==p.userId){ p.userId=d; }
   try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); }catch(e){}
   return p;
 }
@@ -1564,7 +1571,10 @@ function bindMeCard(p){
     r.readAsDataURL(file); e.target.value="";
   };
   const nameI=document.getElementById("me-name"), signI=document.getElementById("me-sign");
-  if(nameI) nameI.addEventListener("input",()=>{ p.nickname=nameI.value; saveProfile(p); debouncePublish(); });
+  if(nameI){
+    nameI.addEventListener("input",()=>{ p.nickname=nameI.value; const d=deriveUserId(p); if(d!==p.userId){ p.userId=d; } saveProfile(p); debouncePublish(); });
+    nameI.addEventListener("blur",()=>{ const d=deriveUserId(p); if(d!==p.userId){ const oldTopic="workbench/"+profile.roomCode+"/"+p.userId; try{ if(mqttClient) mqttClient.publish(oldTopic,"",{retain:true,qos:1}); }catch(e){} p.userId=d; saveProfile(p); try{ if(mqttClient) mqttClient.end(true); }catch(e){} connectMQTT(); } });
+  }
   if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
   bindFriendClicks();
 }
@@ -1574,12 +1584,20 @@ function bindFriendClicks(){
 /* 刷新好友列表：重新发布自己 + 重新订阅房间 topic（broker 会重新投递所有好友的 retained 消息），并立即重绘当前缓存 */
 function refreshFriends(){
   publishMyState();
+  friendSeen={};
   if(mqttClient&&mqttReady){
     try{ mqttClient.subscribe("workbench/"+profile.roomCode+"/+",{qos:1},()=>{}); }catch(e){}
   }
+  setTimeout(pruneFriends, 1500);
   const w=document.getElementById("friends-wrap");
   if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
   refreshOpenFriend();
+}
+/* 一轮刷新后，把 broker 已不再投递（被对方清掉旧身份）的旧好友从本地缓存移除 */
+function pruneFriends(){
+  let changed=false;
+  for(const k of Object.keys(friendsCache)){ if(!friendSeen[k]){ delete friendsCache[k]; changed=true; } }
+  if(changed){ saveFriendsCache(); const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); } refreshOpenFriend(); }
 }
 /* 若好友动态弹窗正打开且数据已更新，自动重新渲染（实时同步任务时长/时间轴/开始时间） */
 let currentFriendUid=null;
@@ -1794,7 +1812,17 @@ function connectMQTT(){
     try{
       const d=JSON.parse(msg.toString());
       if(!d||!d.userId||d.userId===profile.userId)return;
-      friendsCache[d.userId]=d; saveFriendsCache();
+      friendSeen[d.userId]=true;
+      const prev=friendsCache[d.userId];
+      if(prev){
+        const m=Object.assign({},d);
+        if(!m.nickname&&prev.nickname) m.nickname=prev.nickname;
+        if(!m.signature&&prev.signature) m.signature=prev.signature;
+        if(!m.avatar&&prev.avatar) m.avatar=prev.avatar;
+        if((!m.timeline||!m.timeline.length)&&prev.timeline&&prev.timeline.length) m.timeline=prev.timeline;
+        friendsCache[d.userId]=m;
+      } else friendsCache[d.userId]=d;
+      saveFriendsCache();
       if(route==="stats"){ const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); } }
       refreshOpenFriend();
     }catch(e){}
