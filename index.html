@@ -1504,6 +1504,7 @@ const MQTT_URL="wss://broker.emqx.io:8084/mqtt";
 const PROFILE_KEY="wb_profile_v1";
 const FRIENDS_KEY="wb_friends_cache_v1";
 let profile=loadProfile();
+try{ recordUid(profile.userId); }catch(e){}
 let friendsCache=loadFriendsCache();
 let friendSeen={};
 let mqttClient=null, mqttReady=false;
@@ -1526,6 +1527,42 @@ function loadProfile(){
 function saveProfile(p){ profile=p; try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(p)); }catch(e){} }
 function loadFriendsCache(){ try{ return JSON.parse(localStorage.getItem(FRIENDS_KEY))||{}; }catch(e){ return {}; } }
 function saveFriendsCache(){ try{ localStorage.setItem(FRIENDS_KEY,JSON.stringify(friendsCache)); }catch(e){} }
+const OLD_UIDS_KEY="wb_old_uids_v1";
+function loadOldUids(){ try{ const r=localStorage.getItem(OLD_UIDS_KEY); if(r){const a=JSON.parse(r); if(Array.isArray(a))return a;} }catch(e){} return []; }
+function saveOldUids(a){ try{ localStorage.setItem(OLD_UIDS_KEY,JSON.stringify(a)); }catch(e){} }
+function recordUid(u){ const a=loadOldUids(); if(u&&a.indexOf(u)<0){ a.push(u); saveOldUids(a); } }
+/* 发布自己状态时，把本机历史上用过的旧 userId 在服务器上的 retained 消息清掉，避免旧身份回声 */
+function clearOldUids(){
+  const a=loadOldUids();
+  let changed=false;
+  for(const ou of a){
+    if(ou && ou!==profile.userId){
+      try{ if(mqttClient) mqttClient.publish("workbench/"+profile.roomCode+"/"+ou,"",{retain:true,qos:1}); }catch(e){}
+      if(friendsCache[ou]){ delete friendsCache[ou]; changed=true; }
+    }
+  }
+  if(changed) saveFriendsCache();
+}
+/* 判断一条好友消息是不是「自己的旧身份回声」：昵称与当前用户相同/是其前缀（输入中间态），或空壳（初始随机ID残留） */
+function isSelfEcho(d){
+  if(!profile.nickname) return false;
+  const cur=profile.nickname.trim().toLowerCase();
+  const fn=(d.nickname||"").trim().toLowerCase();
+  return (fn && cur===fn) || (!fn && !d.signature && !d.avatar && (!d.timeline||!d.timeline.length));
+}
+/* 清理本地缓存里「看起来像自己」的残留好友（服务器上留下的旧身份） */
+function cleanupSelfEchoes(){
+  let changed=false;
+  for(const k of Object.keys(friendsCache)){
+    if(k===profile.userId) continue;
+    const f=friendsCache[k]; if(!f) continue;
+    if(isSelfEcho(f)){
+      try{ if(mqttClient) mqttClient.publish("workbench/"+profile.roomCode+"/"+k,"",{retain:true,qos:1}); }catch(e){}
+      delete friendsCache[k]; changed=true;
+    }
+  }
+  if(changed){ saveFriendsCache(); const w=document.getElementById("friends-wrap"); if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); } refreshOpenFriend(); }
+}
 
 function meCardHTML(p){
   const av=p.avatar?`<img src="${p.avatar}" alt="">`:`👤`;
@@ -1572,7 +1609,7 @@ function bindMeCard(p){
   };
   const nameI=document.getElementById("me-name"), signI=document.getElementById("me-sign");
   if(nameI){
-    nameI.addEventListener("input",()=>{ p.nickname=nameI.value; const d=deriveUserId(p); if(d!==p.userId){ p.userId=d; } saveProfile(p); debouncePublish(); });
+    nameI.addEventListener("input",()=>{ p.nickname=nameI.value; saveProfile(p); debouncePublish(); });
     nameI.addEventListener("blur",()=>{ const d=deriveUserId(p); if(d!==p.userId){ const oldTopic="workbench/"+profile.roomCode+"/"+p.userId; try{ if(mqttClient) mqttClient.publish(oldTopic,"",{retain:true,qos:1}); }catch(e){} p.userId=d; saveProfile(p); try{ if(mqttClient) mqttClient.end(true); }catch(e){} connectMQTT(); } });
   }
   if(signI) signI.addEventListener("input",()=>{ p.signature=signI.value; saveProfile(p); debouncePublish(); });
@@ -1585,10 +1622,11 @@ function bindFriendClicks(){
 function refreshFriends(){
   publishMyState();
   friendSeen={};
+  cleanupSelfEchoes();
   if(mqttClient&&mqttReady){
     try{ mqttClient.subscribe("workbench/"+profile.roomCode+"/+",{qos:1},()=>{}); }catch(e){}
   }
-  setTimeout(pruneFriends, 1500);
+  setTimeout(()=>{ pruneFriends(); cleanupSelfEchoes(); }, 1500);
   const w=document.getElementById("friends-wrap");
   if(w){ w.innerHTML=friendsHTML(); bindFriendClicks(); }
   refreshOpenFriend();
@@ -1787,6 +1825,7 @@ function myPayload(){
 }
 function publishMyState(){
   if(!mqttReady||!mqttClient){ return; }
+  clearOldUids();
   const topic="workbench/"+profile.roomCode+"/"+profile.userId;
   try{ mqttClient.publish(topic, JSON.stringify(myPayload()), {retain:true,qos:1}, ()=>{}); }catch(e){}
 }
@@ -1812,6 +1851,7 @@ function connectMQTT(){
     try{
       const d=JSON.parse(msg.toString());
       if(!d||!d.userId||d.userId===profile.userId)return;
+      if(isSelfEcho(d))return;
       friendSeen[d.userId]=true;
       const prev=friendsCache[d.userId];
       if(prev){
