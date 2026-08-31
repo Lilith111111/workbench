@@ -1579,8 +1579,24 @@ function meCardHTML(p){
     </div>
   </div>`;
 }
+/* 好友列表去重：内容（昵称+签名+头像）完全相同的多条视为同一人残留，只保留一条（取时间轴更完整/更新更近的）。空壳（无昵称签名头像）不参与去重，避免误合并不同无名氏 */
+function dedupFriends(list){
+  const seen={}, out=[];
+  const score=f=>(f.timeline?f.timeline.length:0)*100000+(f.updatedAt||0);
+  for(const f of list){
+    const hasId=!!(f.nickname||f.signature||f.avatar);
+    if(!hasId){ out.push(f); continue; }
+    const key=(f.nickname||"")+"\u0000"+(f.signature||"")+"\u0000"+(f.avatar||"");
+    if(seen[key]){
+      if(score(f)>score(seen[key])){ const i=out.indexOf(seen[key]); out[i]=f; seen[key]=f; }
+      continue;
+    }
+    seen[key]=f; out.push(f);
+  }
+  return out;
+}
 function friendsHTML(){
-  const fs=Object.values(friendsCache);
+  let fs=dedupFriends(Object.values(friendsCache));
   if(!fs.length) return `<div class="empty-friends">还没有好友～</div>`;
   fs.sort((a,b)=>(a.nickname||"").localeCompare(b.nickname||""));
   return `<div class="friend-grid">`+fs.map(f=>{
