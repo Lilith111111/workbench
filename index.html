@@ -621,15 +621,30 @@ function migrateState(s){
     t.endDate=t.endDate||t.date;
     t.color=t.color||"yellow";
     if(typeof t.order!=="number") t.order=i;
-    if(t.type==="period"&&!t.phase) t.phase="pending";
     if(t.runStart===undefined) t.runStart=null;
     if(t.workMs===undefined) t.workMs=0;
     if(t.lastWorkDate===undefined) t.lastWorkDate=null;
-    if(t.phase==="started"){
-      /* 重开页面后接续计时：先把已进行的工时并入 workMs，再把 runStart 重置为当前时刻继续计，避免重载丢进度 */
-      if(t.runStart!=null) t.workMs=(t.workMs||0)+Math.max(0,Date.now()-t.runStart);
-      t.runStart=Date.now();
-      t.lastWorkDate=tk;
+    if(t.repeat==="range"){
+      if(typeof t.doneDates!=="object"||Array.isArray(t.doneDates)||!t.doneDates)t.doneDates={};
+      /* 旧版区间任务完成态是全局 done（整段都打勾）。迁移：把已完成归到「今天」，其余天不再误显 */
+      if(t.done>=1 && !Object.keys(t.doneDates).length){ t.doneDates[todayKey()]=true; }
+      if(t.done>1) t.done=1;
+    }
+    if(t.type==="period"){
+      /* period 计时任务按天隔离状态：dayState[日期] 存 phase/runStart/workMs/startedAt/endedAt/lastWorkDate。
+         避免点「开始/结束」后整段区间每天都被带动（用户要求：开始只影响当天） */
+      if(typeof t.dayState!=="object"||Array.isArray(t.dayState)||!t.dayState)t.dayState={};
+      if(Object.keys(t.dayState).length===0 && (t.phase==="done"||t.phase==="started"||t.phase==="paused")){
+        /* 旧版顶层状态收归「今天」 */
+        t.dayState[todayKey()]={phase:t.phase,runStart:(t.phase==="started"?t.runStart:null),workMs:t.workMs||0,startedAt:t.startedAt||"",endedAt:t.endedAt||"",lastWorkDate:t.lastWorkDate||todayKey()};
+      }
+      /* 重开页面后接续计时：今天正在进行的，把已进行工时并入 workMs 再继续计 */
+      const d=t.dayState[todayKey()];
+      if(d && d.phase==="started" && d.runStart!=null){
+        d.workMs=(d.workMs||0)+Math.max(0,Date.now()-d.runStart);
+        d.runStart=Date.now();
+        d.lastWorkDate=todayKey();
+      }
     }
     t.planStart=t.planStart||"";
     t.planEnd=t.planEnd||"";
@@ -890,7 +905,7 @@ function renderCalendar(){
     const isPoint=(t.type==="point"||t.type==="single");
     const time=t.planStart||"";
     const time2=isPoint?"":(t.planEnd||"");
-    const done=isTaskDone(t);
+    const done=isTaskDone(t,k);
     if(done){
       items.push({type:"task-done",order:0,time,time2,title:t.name,color:t.color||"yellow",sub:t.desc||"已完成",emoji:"",cls:"",id:t.id,data:t});
     }else{
@@ -918,7 +933,7 @@ function renderCalendar(){
   // render done section
   if(doneItems.length)doneItems[doneItems.length-1].lastDone=true;
   if(pendingItems.length)pendingItems[pendingItems.length-1].lastPending=true;
-  const safeAppend=(parent,it)=>{ try{ parent.appendChild(it.kind==="checkin"?makeRoutineItem(it):makeTaskCard(it)); }catch(e){ console.error("render item failed",e); } };
+  const safeAppend=(parent,it)=>{ try{ parent.appendChild(it.kind==="checkin"?makeRoutineItem(it):makeTaskCard(it,k)); }catch(e){ console.error("render item failed",e); } };
   doneItems.forEach(it=>safeAppend(body,it));
 
 
@@ -966,101 +981,108 @@ function fmtDur(ms){
   return mm? (h+"小时"+mm+"分") : (h+"小时");
 }
 /* 卡片右下角文案：任务完成（移到上方时间轴）后显示「进行 X时Y分」（已扣暂停）；未完成显示预计时间 */
-function currentWorkMs(t){
-  let ms=t.workMs||0;
-  if(t.type==="period"&&t.phase==="started"&&t.runStart!=null){ ms+=Date.now()-t.runStart; }
+function currentWorkMs(t,k){
+  const d=pDay(t,k);
+  let ms=d.workMs||0;
+  if(t.type==="period"&&d.phase==="started"&&d.runStart!=null){ ms+=Date.now()-d.runStart; }
   return ms;
 }
-function taskMetaRight(it){
+function taskMetaRight(it,k){
   const isPeriod=(it.type==="period");
-  const done=isPeriod ? (it.phase==="done") : (it.done>=1 || it.done===true);
-  if(isPeriod && (it.phase==="started"||it.phase==="paused"||it.phase==="done")){
-    return `<span class="tm-dur" data-tid="${it.id}">进行 ${fmtDur(currentWorkMs(it))}</span>`;
+  const done=isTaskDone(it,k);
+  if(isPeriod && ((pDay(it,k).phase==="started"||pDay(it,k).phase==="paused") || isTaskDone(it,k))){
+    return `<span class="tm-dur" data-tid="${it.id}">进行 ${fmtDur(currentWorkMs(it,k))}</span>`;
   }
-  if(done) return "进行 "+fmtDur(it.workMs||0);
+  if(done) return "进行 "+fmtDur(pDay(it,k).workMs||0);
   const isPoint=(it.type==="point"||it.type==="single");
   return isPoint?`${it.planStart||"--"}`:`${it.planStart||"--"}-${it.planEnd||"--"}`;
 }
-function taskAxisHTML(t,lastDone,lastPending){
-  const done=isTaskDone(t);
+function taskAxisHTML(t,k,lastDone,lastPending){
+  const d=pDay(t,k);
+  const done=isTaskDone(t,k);
   if(done){
     const ax=`<div class="tl-axis${done&&!lastDone?" bridge":""}">`;
     if(t.type==="period"){
       return ax+`<div class="tl-rail"></div>`+
-        `<div class="tl-t done top">${t.startedAt||"--"}</div><div class="tl-dot top"></div>`+
-        `<div class="tl-t done bottom">${t.endedAt||"--"}</div><div class="tl-dot bottom"></div></div>`;
+        `<div class="tl-t done top">${d.startedAt||"--"}</div><div class="tl-dot top"></div>`+
+        `<div class="tl-t done bottom">${d.endedAt||"--"}</div><div class="tl-dot bottom"></div></div>`;
     }
     return ax+`<div class="tl-rail"></div><div class="tl-t done mid">${hhmm(t.completedAt)}</div><div class="tl-dot mid"></div></div>`;
   }
   const isPoint=(t.type==="point"||t.type==="single");
-  const started=(t.type==="period"&&(t.phase==="started"||t.phase==="paused")&&t.startedAt);
+  const started=(t.type==="period"&&(d.phase==="started"||d.phase==="paused")&&d.startedAt);
   const label=isPoint?(t.planStart||"--"):`${t.planStart||"--"}~${t.planEnd||"--"}`;
   const bridge=lastPending?"":" bridge";
   if(!isPoint){
-    const topLabel=started?t.startedAt:(t.planStart||"--");
+    const topLabel=started?d.startedAt:(t.planStart||"--");
     return `<div class="tl-axis${bridge}"><div class="tl-rail light"></div>`+
       `<div class="tl-t plan top">${topLabel}</div><div class="tl-dot light top"></div>`+
       `<div class="tl-t plan bottom">${t.planEnd||"--"}</div><div class="tl-dot light bottom"></div></div>`;
   }
   return `<div class="tl-axis${bridge}"><div class="tl-rail light"></div><div class="tl-t plan mid">${label}</div><div class="tl-dot light mid"></div></div>`;
 }
-function taskActionHTML(t){
+function taskActionHTML(t,k){
+  const d=pDay(t,k);
   if(t.type==="period"){
-    if(t.phase==="done") return `<div class="tl-check checked" data-action="none"></div>`;
-    if(t.phase==="started") return `<button type="button" class="tl-btn pause" data-action="pause">暂停</button><button type="button" class="tl-btn end" data-action="end">结束</button>`;
-    if(t.phase==="paused") return `<button type="button" class="tl-btn resume" data-action="resume">继续</button><button type="button" class="tl-btn end" data-action="end">结束</button>`;
+    if(isTaskDone(t,k)) return `<div class="tl-check checked" data-action="none"></div>`;
+    if(d.phase==="started") return `<button type="button" class="tl-btn pause" data-action="pause">暂停</button><button type="button" class="tl-btn end" data-action="end">结束</button>`;
+    if(d.phase==="paused") return `<button type="button" class="tl-btn resume" data-action="resume">继续</button><button type="button" class="tl-btn end" data-action="end">结束</button>`;
     return `<button type="button" class="tl-btn start" data-action="start">开始</button>`;
   }
-  return `<div class="tl-check ${isTaskDone(t)?"checked":""}" data-action="toggle"></div>`;
+  return `<div class="tl-check ${isTaskDone(t,k)?"checked":""}" data-action="toggle"></div>`;
 }
-function bindTaskAction(slot,t){
+function bindTaskAction(slot,t,k){
   slot.querySelectorAll("[data-action]").forEach(a=>{
     const act=a.dataset.action;
-    if(act==="toggle") a.addEventListener("click",e=>{e.stopPropagation();toggleTaskDone(t.id,a);});
-    else if(act==="start") a.addEventListener("click",e=>{e.stopPropagation();startPeriodTask(t.id);});
-    else if(act==="pause") a.addEventListener("click",e=>{e.stopPropagation();pausePeriodTask(t.id);});
-    else if(act==="resume") a.addEventListener("click",e=>{e.stopPropagation();resumePeriodTask(t.id);});
-    else if(act==="end") a.addEventListener("click",e=>{e.stopPropagation();endPeriodTask(t.id);});
+    if(act==="toggle") a.addEventListener("click",e=>{e.stopPropagation();toggleTaskDone(t.id,a,k);});
+    else if(act==="start") a.addEventListener("click",e=>{e.stopPropagation();startPeriodTask(t.id,k);});
+    else if(act==="pause") a.addEventListener("click",e=>{e.stopPropagation();pausePeriodTask(t.id,k);});
+    else if(act==="resume") a.addEventListener("click",e=>{e.stopPropagation();resumePeriodTask(t.id,k);});
+    else if(act==="end") a.addEventListener("click",e=>{e.stopPropagation();endPeriodTask(t.id,k);});
   });
 }
-function startPeriodTask(id){
+function startPeriodTask(id,k){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  t.phase="started"; t.runStart=Date.now(); t.workMs=0; t.startedAt=hhmmNow(); saveState(); render();
+  k=k||dateKey(selDate); const d=pDay(t,k);
+  d.phase="started"; d.runStart=Date.now(); d.workMs=0; d.startedAt=hhmmNow(); saveState(); render();
 }
-function pausePeriodTask(id){
+function pausePeriodTask(id,k){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; t.lastWorkDate=todayKey(); }
-  t.phase="paused"; saveState(); render();
+  k=k||dateKey(selDate); const d=pDay(t,k);
+  if(d.phase==="started"&&d.runStart!=null){ d.workMs=(d.workMs||0)+(Date.now()-d.runStart); d.runStart=null; d.lastWorkDate=todayKey(); }
+  d.phase="paused"; saveState(); render();
 }
-function resumePeriodTask(id){
+function resumePeriodTask(id,k){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  if(t.phase==="paused"){ t.phase="started"; t.runStart=Date.now(); }
+  k=k||dateKey(selDate); const d=pDay(t,k);
+  if(d.phase==="paused"){ d.phase="started"; d.runStart=Date.now(); }
   saveState(); render();
 }
-function endPeriodTask(id){
+function endPeriodTask(id,k){
   const t=state.tasks.find(x=>x.id===id);if(!t)return;
-  if(t.phase!=="started"&&t.phase!=="paused"){ t.phase="started"; t.runStart=Date.now(); t.workMs=0; }
-  if(t.phase==="started"&&t.runStart!=null){ t.workMs=(t.workMs||0)+(Date.now()-t.runStart); t.runStart=null; t.lastWorkDate=todayKey(); }
-  if(!t.startedAt) t.startedAt=hhmmNow();
-  t.phase="done"; t.endedAt=hhmmNow(); saveState(); render();
+  k=k||dateKey(selDate); const d=pDay(t,k);
+  if(d.phase!=="started"&&d.phase!=="paused"){ d.phase="started"; d.runStart=Date.now(); d.workMs=0; }
+  if(d.phase==="started"&&d.runStart!=null){ d.workMs=(d.workMs||0)+(Date.now()-d.runStart); d.runStart=null; d.lastWorkDate=todayKey(); }
+  if(!d.startedAt) d.startedAt=hhmmNow();
+  d.phase="done"; d.endedAt=hhmmNow(); saveState(); render();
 }
-function makeTaskCard(it){
+function makeTaskCard(it,k){
   const t=it.data;
   const div=document.createElement("div");div.className="tl-item";div.dataset.id=t.id;
-  div.innerHTML=taskAxisHTML(t,it.lastDone,it.lastPending)+
-    `<div class="tl-card ${isTaskDone(t)?"done":""}" data-id="${t.id}">`+
+  div.innerHTML=taskAxisHTML(t,k,it.lastDone,it.lastPending)+
+    `<div class="tl-card ${isTaskDone(t,k)?"done":""}" data-id="${t.id}">`+
       `<div class="tl-body">`+
         `<div class="tl-name">${esc(t.name)}</div>`+
-        `<div class="tl-action-slot">${taskActionHTML(t)}</div>`+
+        `<div class="tl-action-slot">${taskActionHTML(t,k)}</div>`+
       `</div>`+
-      `<div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(t)}</span><span class="tl-meta-l2">${taskMetaRight(t)}</span></div>`+
+      `<div class="tl-meta-inline"><span class="tl-meta-l1">${taskDateRangeText(t)}</span><span class="tl-meta-l2">${taskMetaRight(t,k)}</span></div>`+
       (t.desc?`<div class="tl-note">${esc(t.desc)}</div>`:"")+
     `</div>`;
   const card=div.querySelector(".tl-card");
   applyCardColor(card,t.color);
-  bindTaskAction(div.querySelector(".tl-action-slot"),t);
+  bindTaskAction(div.querySelector(".tl-action-slot"),t,k);
   div.addEventListener("click",e=>{ if(e.target.closest(".tl-action-slot"))return; openTaskModal(t.id); });
-  bindLongPressDrag(div,t);
+  bindLongPressDrag(div,t,k);
   return div;
 }
 function makeRoutineItem(it){
@@ -1110,11 +1132,11 @@ function makeRoutineItem(it){
   return div;
 }
 
-function bindLongPressDrag(el,t){
+function bindLongPressDrag(el,t,k){
   if(!el||!el.parentElement)return;
   let timer=null, startX=0, startY=0, dragging=false, clone=null, placeholder=null, list=null, startIndex=-1, initialTop=0, initialLeft=0, itemHeight=0;
   el.addEventListener("touchstart",e=>{
-    if(isTaskDone(t))return;
+    if(isTaskDone(t,k))return;
     startX=e.touches[0].clientX;startY=e.touches[0].clientY;dragging=false;
     timer=setTimeout(()=>{
       dragging=true;
@@ -1155,7 +1177,7 @@ function bindLongPressDrag(el,t){
     if(finalIndex!==-1&&finalIndex!==startIndex){
       const k=dateKey(selDate);
       const dayTasks=state.tasks.filter(x=>taskOnDay(x,k));
-      const pending=dayTasks.filter(x=>!isTaskDone(x)).sort((a,b)=>a.order-b.order);
+      const pending=dayTasks.filter(x=>!isTaskDone(x,k)).sort((a,b)=>a.order-b.order);
       const children=Array.from(list.children).filter(c=>c!==el&&c!==placeholder);
       const taskChildren=children.filter(c=>pending.find(x=>x.id===c.dataset.id));
       taskChildren.forEach((c,i)=>{const found=pending.find(x=>x.id===c.dataset.id);if(found)found.order=i;});
@@ -1168,9 +1190,20 @@ function bindLongPressDrag(el,t){
     renderCalendar();
   });
 }
-function isTaskDone(t){
-  if(t.type==="period")return t.phase==="done";
+function isTaskDone(t,k){
+  k=k||dateKey(selDate);
+  if(t.type==="period")return pDay(t,k).phase==="done" && pDay(t,k).lastWorkDate===k;
+  if(t.repeat==="range")return !!(t.doneDates && t.doneDates[k]); /* 区间任务按天记录完成，避免某天打勾整段都打勾 */
   return t.done>=1;
+}
+/* period 计时任务的「按天状态」：dayState[日期] 存 phase/runStart/workMs/startedAt/endedAt/lastWorkDate。
+   计时任务可跨日期区间重复，点开始/结束只影响当天，不带动区间内其他天。 */
+function pDay(t,k){
+  k=k||dateKey(selDate);
+  if(t.type!=="period") return t;
+  if(!t.dayState) t.dayState={};
+  if(!t.dayState[k]) t.dayState[k]={phase:"pending",runStart:null,workMs:0,startedAt:"",endedAt:"",lastWorkDate:null};
+  return t.dayState[k];
 }
 
 /* ============ Stats ============ */
@@ -1204,14 +1237,27 @@ function doRoutineCheckin(id,mood,note,el){
   closeModal("modal-mood");
   render();
 }
-function toggleTaskDone(id,el){
+function toggleTaskDone(id,el,k){
+  k=k||dateKey(selDate);
   const t=state.tasks.find(x=>x.id===id);
   if(!t)return;
-  if(t.done>=1){
-    t.done=0;t.completedAt=null;
+  if(t.repeat==="range"){
+    /* 区间任务按天打勾：只影响当天，不会把整段区间都打勾 */
+    t.doneDates=t.doneDates||{};
+    if(t.doneDates[k]){
+      delete t.doneDates[k];
+      if(!Object.keys(t.doneDates).length) t.completedAt=null;
+    }else{
+      t.doneDates[k]=true; t.completedAt=new Date().toISOString();
+      if(el)confettiAtEl(el);
+    }
   }else{
-    t.done=1;t.completedAt=new Date().toISOString();
-    if(el)confettiAtEl(el);
+    if(t.done>=1){
+      t.done=0;t.completedAt=null;
+    }else{
+      t.done=1;t.completedAt=new Date().toISOString();
+      if(el)confettiAtEl(el);
+    }
   }
   saveState();
   render();
@@ -1691,7 +1737,7 @@ function trendHTML(offset){
   const days=[];
   for(let i=0;i<7;i++){ const d=new Date(mon); d.setDate(d.getDate()+i); days.push(dateKey(d)); }
   const labels=days.map(d=>{const dt=new Date(d+"T00:00:00");return (dt.getMonth()+1)+"/"+dt.getDate();});
-  const vals=days.map(d=>state.tasks.filter(t=>taskOnDay(t,d)&&isTaskDone(t)&&t.type==="period"&&(t.workMs||0)>0).reduce((s,t)=>s+(t.workMs||0),0));
+  const vals=days.map(d=>state.tasks.filter(t=>taskOnDay(t,d)&&isTaskDone(t,d)&&t.type==="period"&&(pDay(t,d).workMs||0)>0).reduce((s,t)=>s+(pDay(t,d).workMs||0),0));
   const max=Math.max.apply(null,vals.concat([1]));
   const W=420,H=104,padX=40,padTop=30,plotH=44,baseY=padTop+plotH;
   const stepX=days.length>1?(W-2*padX)/(days.length-1):0;
@@ -1732,8 +1778,8 @@ function updateTrend(){
 }
 function taskPieHTML(){
   const tk=todayKey();
-  const tasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===tk && t.phase!=="started").sort((a,b)=>(b.workMs||0)-(a.workMs||0));
-  const total=tasks.reduce((s,t)=>s+(t.workMs||0),0);
+  const tasks=state.tasks.filter(t=>{const d=pDay(t,tk); return (d.workMs||0)>0 && d.lastWorkDate===tk && d.phase!=="started";}).sort((a,b)=>(pDay(b,tk).workMs||0)-(pDay(a,tk).workMs||0));
+  const total=tasks.reduce((s,t)=>s+(pDay(t,tk).workMs||0),0);
   const PALETTE=["#B79CED","#8FB8F0","#8FD9B6","#F5D77A","#F2A06A","#EFA0C2","#84D2CC","#EE9B9B"];
   const colOf=i=>PALETTE[i%PALETTE.length];
   const trunc=(s,n)=>{s=s||"";return s.length>n?s.slice(0,n)+"…":s;};
@@ -1748,12 +1794,12 @@ function taskPieHTML(){
       +`<circle cx="${CX}" cy="${CY}" r="${R}" fill="${col}" stroke="#fff" stroke-width="2"/>`
       +`<text x="${CX}" y="${CY-3}" text-anchor="middle" font-size="12" font-weight="800" fill="#4A4063">${esc(trunc(t.name,6))}</text>`
       +`<line x1="${CX+R}" y1="${CY}" x2="${CX+LEAD_OUT}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>`
-      +`<text x="${CX+LEAD_OUT+3}" y="${CY+3}" text-anchor="start" font-size="11" font-weight="700" fill="#5A5270">${fmtDur(t.workMs||0)}</text></svg></div>`;
+      +`<text x="${CX+LEAD_OUT+3}" y="${CY+3}" text-anchor="start" font-size="11" font-weight="700" fill="#5A5270">${fmtDur(pDay(t,tk).workMs||0)}</text></svg></div>`;
   }
   let a0=-Math.PI/2, paths="", innerText="", leaderLines="", leaderText="";
   const leaders=[];
   tasks.forEach((t,i)=>{
-    const val=t.workMs||0, frac=val/total;
+    const val=pDay(t,tk).workMs||0, frac=val/total;
     const a1=a0+frac*Math.PI*2;
     const large=(a1-a0)>Math.PI?1:0;
     const x0=CX+R*Math.cos(a0), y0=CY+R*Math.sin(a0);
@@ -1789,11 +1835,11 @@ function taskPieHTML(){
 function statsCardsHTML(){
   const today=dateKey(new Date());
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,today));
-  const doneTasks=dayTasks.filter(t=>isTaskDone(t)).length;
+  const doneTasks=dayTasks.filter(t=>isTaskDone(t,today)).length;
   const pendingTasks=dayTasks.length-doneTasks;
   const pct=dayTasks.length?Math.round(doneTasks/dayTasks.length*100):0;
-  const pieTasks=state.tasks.filter(t=>(t.workMs||0)>0 && t.lastWorkDate===today && t.phase!=="started");
-  const pieTotal=pieTasks.reduce((s,t)=>s+(t.workMs||0),0);
+  const pieTasks=state.tasks.filter(t=>{const d=pDay(t,today); return (d.workMs||0)>0 && d.lastWorkDate===today && d.phase!=="started";});
+  const pieTotal=pieTasks.reduce((s,t)=>s+(pDay(t,today).workMs||0),0);
   return `    <div class="st-card">
       <div class="st-title">任务明细</div>
       <div class="st-sub" style="text-align:center;">今日累计 ${fmtDur(pieTotal)}</div>
@@ -1854,8 +1900,9 @@ function buildDayTimeline(k){
   });
   const dayTasks=state.tasks.filter(t=>taskOnDay(t,k)).sort((a,b)=>a.order-b.order);
   dayTasks.forEach(t=>{
-    const done=isTaskDone(t);
-    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",startedAt:t.startedAt||"",endedAt:t.endedAt||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:t.phase,workMs:t.workMs||0});
+    const done=isTaskDone(t,k);
+    const d=pDay(t,k);
+    items.push({kind:"task",done,name:t.name,color:t.color||"yellow",type:t.type,repeat:t.repeat,planStart:t.planStart||"",planEnd:t.planEnd||"",startedAt:d.startedAt||"",endedAt:d.endedAt||"",desc:t.desc||"",date:t.date,endDate:t.endDate,completedAt:t.completedAt,phase:d.phase,workMs:d.workMs||0});
   });
   return items;
 }
@@ -2036,8 +2083,11 @@ setInterval(()=>{
   document.querySelectorAll(".tm-dur[data-tid]").forEach(el=>{
     if(el.closest("#modal-friend")) return; /* 好友弹窗内为同步快照，不实时跳秒 */
     const t=state.tasks.find(x=>x.id===el.dataset.tid);
-    if(t&&t.type==="period"&&(t.phase==="started"||t.phase==="paused"||t.phase==="done")){
-      el.textContent="进行 "+fmtDur(currentWorkMs(t));
+    if(t&&t.type==="period"){
+      const d=pDay(t,dateKey(selDate));
+      if(d.phase==="started"||d.phase==="paused"||d.phase==="done"){
+        el.textContent="进行 "+fmtDur(currentWorkMs(t,dateKey(selDate)));
+      }
     }
   });
 },1000);
